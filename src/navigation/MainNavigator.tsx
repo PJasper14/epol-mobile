@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 
 // Screens
 import DashboardScreen from '../screens/DashboardScreen';
-import MapScreen from '../screens/MapScreen';
+// import MapScreen from '../screens/MapScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ReportIncidentScreen from '../screens/ReportIncidentScreen';
 import AttendanceScreen from '../screens/AttendanceScreen';
@@ -53,7 +53,7 @@ type ProfileStackParamList = {
 const DashboardStack = createStackNavigator<DashboardStackParamList>();
 const AttendanceStack = createStackNavigator<AttendanceStackParamList>();
 const SafeguardingStack = createStackNavigator<SafeguardingStackParamList>();
-const MapStack = createStackNavigator<MapStackParamList>();
+// const MapStack = createStackNavigator<MapStackParamList>();
 const ProfileStack = createStackNavigator<ProfileStackParamList>();
 
 // Dashboard Stack Navigator
@@ -79,12 +79,12 @@ const SafeguardingStackNavigator = () => (
 );
 
 // Map Stack Navigator
-const MapStackNavigator = () => (
-  <MapStack.Navigator screenOptions={{ headerShown: false }}>
-    <MapStack.Screen name="Map" component={MapScreen} />
-    <MapStack.Screen name="ReportIncident" component={ReportIncidentScreen} />
-  </MapStack.Navigator>
-);
+// const MapStackNavigator = () => (
+//   <MapStack.Navigator screenOptions={{ headerShown: false }}>
+//     <MapStack.Screen name="Map" component={MapScreen} />
+//     <MapStack.Screen name="ReportIncident" component={ReportIncidentScreen} />
+//   </MapStack.Navigator>
+// );
 
 // Profile Stack Navigator
 const ProfileStackNavigator = () => (
@@ -181,14 +181,14 @@ const MainNavigator = () => {
               tabBarVisible: getTabBarVisibility(route),
             })}
           />
-          <Tab.Screen 
+          {/* <Tab.Screen 
             name="MapTab" 
             component={MapStackNavigator}
             options={({ route }) => ({
               tabBarLabel: 'Map',
               tabBarVisible: getTabBarVisibility(route),
             })}
-          />
+          /> */}
         </>
       )}
       <Tab.Screen 

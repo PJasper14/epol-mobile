@@ -211,69 +211,6 @@ const DashboardScreen = () => {
             </View>
           </Card.Content>
         </Card>
-
-        {/* Attendance Card */}
-        <Card style={styles.card} onPress={navigateToAttendance}>
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderLeft}>
-                <Ionicons name="finger-print" size={24} color={COLORS.primary} />
-                <Title style={styles.cardTitle}>Today's Attendance</Title>
-              </View>
-              <IconButton 
-                icon="chevron-right" 
-                size={24} 
-                iconColor={COLORS.text.secondary}
-              />
-            </View>
-            <Divider style={styles.divider} />
-            
-            <View style={styles.attendanceDetails}>
-              <View style={styles.attendanceItem}>
-                <Text style={styles.attendanceLabel}>Clock In</Text>
-                <Text style={styles.attendanceValue}>
-                  {attendanceToday?.clockIn || 'Not recorded'}
-                </Text>
-              </View>
-              
-              <View style={styles.attendanceItem}>
-                <Text style={styles.attendanceLabel}>Clock Out</Text>
-                <Text style={styles.attendanceValue}>
-                  {attendanceToday?.clockOut || 'Not recorded'}
-                </Text>
-              </View>
-            </View>
-          </Card.Content>
-        </Card>
-
-        {/* Safeguarding Card */}
-        <Card style={styles.card} onPress={navigateToReportIncident}>
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderLeft}>
-                <MaterialCommunityIcons name="shield-alert-outline" size={24} color={COLORS.primary} />
-                <Title style={styles.cardTitle}>Safeguarding</Title>
-              </View>
-              <IconButton 
-                icon="chevron-right" 
-                size={24} 
-                iconColor={COLORS.text.secondary}
-              />
-            </View>
-            <Divider style={styles.divider} />
-            
-            <Paragraph style={styles.safeguardingText}>
-              Report environmental incidents and violations. Your reports help protect our environment.
-            </Paragraph>
-            
-            <TouchableOpacity 
-              style={styles.reportButton}
-              onPress={navigateToReportIncident}
-            >
-              <Text style={styles.reportButtonText}>REPORT INCIDENT</Text>
-            </TouchableOpacity>
-          </Card.Content>
-        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -379,61 +316,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     color: COLORS.text.secondary,
-  },
-  card: {
-    margin: SPACING.m,
-    marginTop: 0,
-    borderRadius: 8,
-    ...SHADOWS.small,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardTitle: {
-    fontSize: 18,
-    marginLeft: SPACING.s,
-    color: COLORS.text.primary,
-  },
-  divider: {
-    marginVertical: SPACING.m,
-  },
-  attendanceDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  attendanceItem: {
-    flex: 1,
-  },
-  attendanceLabel: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-    marginBottom: 4,
-  },
-  attendanceValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text.primary,
-  },
-  safeguardingText: {
-    marginBottom: SPACING.m,
-    color: COLORS.text.secondary,
-    lineHeight: 20,
-  },
-  reportButton: {
-    backgroundColor: COLORS.primary,
-    padding: SPACING.m,
-    borderRadius: 4,
-    alignItems: 'center',
-  },
-  reportButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
   },
   loadingContainer: {
     flex: 1,

@@ -31,6 +31,11 @@ const EMPLOYEES = [
 ];
 
 const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+const ALLOWED_CLOCK_IN_START = 14; // 2:00 PM in 24-hour format
+const WORK_START_TIME = 14.5;      // 2:30 PM in decimal format (14 + 30/60)
+const WORK_END_TIME = 18.5;        // 6:30 PM in decimal format (18 + 30/60)
+const ALLOWED_CLOCK_IN_END = 15.5;   // 3:30 PM in 24-hour format
+const CLOCK_OUT_TIME = 18.5;       // 6:30 PM in decimal format (18 + 30/60)
 
 const AttendanceScreen = () => {
   const navigation = useNavigation();
@@ -66,21 +71,28 @@ const AttendanceScreen = () => {
     if (!selectedEmployee) return;
     const today = new Date().toISOString().split('T')[0];
     const employeeRecords = attendanceRecords[today]?.[selectedEmployee.id] || {};
-    if (employeeRecords.clockIn && !employeeRecords.clockOut) {
-      // Parse clockIn as Date
-      let clockInDate: Date;
-      if (employeeRecords.clockInISO) {
-        clockInDate = new Date(employeeRecords.clockInISO);
-      } else {
-        // Fallback: try to parse from time string (not reliable, but for legacy)
-        clockInDate = new Date(today + 'T' + employeeRecords.clockIn);
-      }
+    
+    if (employeeRecords.clockIn) {
       const updateTimer = () => {
         const now = new Date();
-        const elapsed = now.getTime() - clockInDate.getTime();
-        const remaining = FOUR_HOURS_MS - elapsed;
-        setClockOutTimer(remaining > 0 ? remaining : 0);
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+        const currentSecond = now.getSeconds();
+        const currentTime = currentHour + (currentMinute / 60) + (currentSecond / 3600);
+        
+        if (currentTime >= WORK_END_TIME) {
+          setClockOutTimer(0);
+          if (timerInterval.current) clearInterval(timerInterval.current);
+          return;
+        }
+        
+        // Calculate exact time remaining in milliseconds
+        const endTime = new Date();
+        endTime.setHours(18, 30, 0, 0); // Set to 6:30 PM
+        const remainingMs = endTime.getTime() - now.getTime();
+        setClockOutTimer(remainingMs > 0 ? remainingMs : 0);
       };
+      
       updateTimer();
       timerInterval.current = setInterval(updateTimer, 1000);
       return () => {
@@ -122,7 +134,7 @@ const AttendanceScreen = () => {
     }
   };
 
-  const saveAttendanceRecord = async (type: 'clockIn' | 'clockOut', employeeId: string) => {
+  const saveAttendanceRecord = async (type: 'clockIn' | 'clockOut' | 'absent', employeeId: string) => {
     try {
       const now = new Date();
       const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -136,44 +148,152 @@ const AttendanceScreen = () => {
       if (!records[today][employeeId]) {
         records[today][employeeId] = {};
       }
-      records[today][employeeId][type] = timeString;
-      if (type === 'clockIn') {
-        records[today][employeeId].clockInISO = isoString;
+      
+      if (type === 'absent') {
+        records[today][employeeId].status = 'absent';
+        records[today][employeeId].markedAt = timeString;
+        records[today][employeeId].markedAtISO = isoString;
+      } else {
+        records[today][employeeId][type] = timeString;
+        if (type === 'clockIn') {
+          records[today][employeeId].clockInISO = isoString;
+        }
       }
+      
       await AsyncStorage.setItem('attendance_records', JSON.stringify(records));
       setAttendanceRecords(records);
+      
       const employeeName = EMPLOYEES.find(emp => emp.id === employeeId)?.name || 'Employee';
       Alert.alert(
         'Success',
-        type === 'clockIn'
-          ? `${employeeName} has clocked in at ${timeString}`
-          : `${employeeName} has clocked out at ${timeString}`
+        type === 'absent'
+          ? `${employeeName} has been marked as absent for today`
+          : type === 'clockIn'
+            ? `${employeeName} has clocked in at ${timeString}`
+            : `${employeeName} has clocked out at ${timeString}`
       );
-      // setTimeout(() => {
-      //   setSelectedEmployee(null);
-      //   setShowEmployeeSelector(true);
-      // }, 1500);
     } catch (error) {
       console.error('Error saving attendance record', error);
       Alert.alert('Error', 'Failed to save attendance record');
     }
   };
 
+  const isClockInAvailable = () => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour + (currentMinute / 60);
+    
+    // Check if current time is after 2:20 PM
+    if (currentHour === ALLOWED_CLOCK_IN_START && currentMinute >= 20) {
+      return { 
+        available: true, 
+        isLate: currentTime >= WORK_START_TIME,
+        isAbsent: false,
+        isExpired: false
+      };
+    }
+    if (currentHour > ALLOWED_CLOCK_IN_START && currentHour < ALLOWED_CLOCK_IN_END) {
+      return { 
+        available: true, 
+        isLate: true,
+        isAbsent: false,
+        isExpired: false
+      };
+    }
+    if (currentHour >= ALLOWED_CLOCK_IN_END) {
+      return { 
+        available: false, 
+        isLate: false,
+        isAbsent: true,
+        isExpired: true
+      };
+    }
+    return { 
+      available: false, 
+      isLate: false,
+      isAbsent: false,
+      isExpired: false
+    };
+  };
+
   const handleEmployeeSelect = (employee: typeof EMPLOYEES[0]) => {
     setSelectedEmployee(employee);
     setShowEmployeeSelector(false);
     
-    // Show attendance options screen
     const today = new Date().toISOString().split('T')[0];
     const employeeRecords = attendanceRecords[today]?.[employee.id] || {};
+    
+    // Check if clock-in is available based on time
+    const timeCheck = isClockInAvailable();
+    
+    // Check if current time is past 6:30 PM
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour + (currentMinute / 60);
+    
+    if (currentTime >= WORK_END_TIME) {
+      Alert.alert(
+        'Work Period Ended',
+        'The work period has ended (6:30 PM). You cannot clock in or out for today.',
+        [
+          { 
+            text: 'OK', 
+            onPress: () => {
+              setSelectedEmployee(null);
+              setShowEmployeeSelector(true);
+            }
+          }
+        ]
+      );
+      return;
+    }
+    
+    if (!employeeRecords.clockIn && !timeCheck.available) {
+      if (timeCheck.isAbsent) {
+        Alert.alert(
+          'Marked as Absent',
+          'Clock-in period has ended. You will be marked as absent for today.',
+          [
+            { 
+              text: 'OK', 
+              onPress: async () => {
+                await saveAttendanceRecord('absent', employee.id);
+                setSelectedEmployee(null);
+                setShowEmployeeSelector(true);
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Clock-in Not Available',
+          'Clock-in is available starting at 2:20 PM.',
+          [
+            { text: 'OK', onPress: () => {
+              setSelectedEmployee(null);
+              setShowEmployeeSelector(true);
+            }}
+          ]
+        );
+      }
+      return;
+    }
     
     // Automatically determine the most likely action needed
     if (!employeeRecords.clockIn) {
       setAttendanceType('clockIn');
+      if (timeCheck.isLate) {
+        Alert.alert(
+          'Late Clock-in',
+          'You are clocking in after the work start time of 2:30 PM.',
+          [{ text: 'OK' }]
+        );
+      }
     } else if (employeeRecords.clockIn && !employeeRecords.clockOut) {
       setAttendanceType('clockOut');
     } else {
-      // Both clock in and out exist, default to clock in for a new session
       setAttendanceType('clockIn');
     }
   };
@@ -397,6 +517,12 @@ const AttendanceScreen = () => {
         .toString()
         .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
+    const timeCheck = isClockInAvailable();
+    const timeElapsed = employeeRecords.clockIn ? new Date().getTime() - new Date(employeeRecords.clockInISO).getTime() : 0;
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour + (currentMinute / 60);
     return (
       <ScrollView style={styles.container}>
         <Surface style={styles.header}>
@@ -469,13 +595,51 @@ const AttendanceScreen = () => {
               </View>
             )}
             
+            {employeeRecords.clockIn && timeElapsed >= FOUR_HOURS_MS && (
+              <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                <Text style={{ fontSize: 18, color: COLORS.error, fontWeight: 'bold' }}>
+                  Attendance period has expired
+                </Text>
+                <Text style={{ fontSize: 14, color: COLORS.text.secondary, marginTop: 8 }}>
+                  You cannot clock in or out for today
+                </Text>
+              </View>
+            )}
+            
+            {currentTime >= WORK_END_TIME && (
+              <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                <Text style={{ fontSize: 18, color: COLORS.error, fontWeight: 'bold' }}>
+                  Work Period Ended
+                </Text>
+                <Text style={{ fontSize: 14, color: COLORS.text.secondary, marginTop: 8 }}>
+                  The work period has ended (6:30 PM). You cannot clock in or out for today.
+                </Text>
+              </View>
+            )}
+            
+            {employeeRecords.clockIn && !employeeRecords.clockOut && currentTime < CLOCK_OUT_TIME && (
+              <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                <Text style={{ fontSize: 14, color: COLORS.text.secondary, marginTop: 8 }}>
+                  Clock out will be available at 6:30 PM
+                </Text>
+              </View>
+            )}
+            
             <View style={styles.buttonContainer}>
               <Button
                 mode="contained"
                 onPress={() => handleAuthenticate('clockIn', selectedEmployee.id)}
-                disabled={!!employeeRecords.clockIn || isAuthenticating}
+                disabled={
+                  !!employeeRecords.clockIn || 
+                  isAuthenticating || 
+                  timeCheck.isExpired ||
+                  currentTime >= WORK_END_TIME
+                }
                 loading={isAuthenticating && attendanceType === 'clockIn'}
-                style={[styles.button, { backgroundColor: COLORS.primary, opacity: !!employeeRecords.clockIn ? 0.5 : 1 }]}
+                style={[styles.button, { 
+                  backgroundColor: COLORS.primary, 
+                  opacity: (!!employeeRecords.clockIn || timeCheck.isExpired || currentTime >= WORK_END_TIME) ? 0.5 : 1 
+                }]}
                 icon={({ size, color }) => (
                   <Ionicons name="finger-print" size={size} color={color} />
                 )}
@@ -490,13 +654,17 @@ const AttendanceScreen = () => {
                   !employeeRecords.clockIn ||
                   !!employeeRecords.clockOut ||
                   isAuthenticating ||
-                  clockOutTimer > 0
+                  currentTime < CLOCK_OUT_TIME ||
+                  currentTime >= WORK_END_TIME
                 }
                 loading={isAuthenticating && attendanceType === 'clockOut'}
                 style={[styles.button, {
                   backgroundColor: COLORS.secondary,
                   opacity:
-                    (!employeeRecords.clockIn || !!employeeRecords.clockOut || clockOutTimer > 0)
+                    (!employeeRecords.clockIn || 
+                     !!employeeRecords.clockOut || 
+                     currentTime < CLOCK_OUT_TIME ||
+                     currentTime >= WORK_END_TIME)
                       ? 0.5
                       : 1
                 }]}
