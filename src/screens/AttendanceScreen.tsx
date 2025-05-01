@@ -36,6 +36,7 @@ const WORK_START_TIME = 14.5;      // 2:30 PM in decimal format (14 + 30/60)
 const WORK_END_TIME = 18.5;        // 6:30 PM in decimal format (18 + 30/60)
 const ALLOWED_CLOCK_IN_END = 15.5;   // 3:30 PM in 24-hour format
 const CLOCK_OUT_TIME = 18.5;       // 6:30 PM in decimal format (18 + 30/60)
+const EXTENDED_CLOCK_OUT_TIME = 18.67; // 6:40 PM in decimal format (18 + 40/60)
 
 const AttendanceScreen = () => {
   const navigation = useNavigation();
@@ -134,7 +135,7 @@ const AttendanceScreen = () => {
     }
   };
 
-  const saveAttendanceRecord = async (type: 'clockIn' | 'clockOut' | 'absent', employeeId: string) => {
+  const saveAttendanceRecord = async (type: 'clockIn' | 'clockOut', employeeId: string) => {
     try {
       const now = new Date();
       const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -149,15 +150,9 @@ const AttendanceScreen = () => {
         records[today][employeeId] = {};
       }
       
-      if (type === 'absent') {
-        records[today][employeeId].status = 'absent';
-        records[today][employeeId].markedAt = timeString;
-        records[today][employeeId].markedAtISO = isoString;
-      } else {
-        records[today][employeeId][type] = timeString;
-        if (type === 'clockIn') {
-          records[today][employeeId].clockInISO = isoString;
-        }
+      records[today][employeeId][type] = timeString;
+      if (type === 'clockIn') {
+        records[today][employeeId].clockInISO = isoString;
       }
       
       await AsyncStorage.setItem('attendance_records', JSON.stringify(records));
@@ -166,11 +161,9 @@ const AttendanceScreen = () => {
       const employeeName = EMPLOYEES.find(emp => emp.id === employeeId)?.name || 'Employee';
       Alert.alert(
         'Success',
-        type === 'absent'
-          ? `${employeeName} has been marked as absent for today`
-          : type === 'clockIn'
-            ? `${employeeName} has clocked in at ${timeString}`
-            : `${employeeName} has clocked out at ${timeString}`
+        type === 'clockIn'
+          ? `${employeeName} has clocked in at ${timeString}`
+          : `${employeeName} has clocked out at ${timeString}`
       );
     } catch (error) {
       console.error('Error saving attendance record', error);
@@ -189,7 +182,6 @@ const AttendanceScreen = () => {
       return { 
         available: true, 
         isLate: currentTime >= WORK_START_TIME,
-        isAbsent: false,
         isExpired: false
       };
     }
@@ -197,7 +189,6 @@ const AttendanceScreen = () => {
       return { 
         available: true, 
         isLate: true,
-        isAbsent: false,
         isExpired: false
       };
     }
@@ -205,14 +196,12 @@ const AttendanceScreen = () => {
       return { 
         available: false, 
         isLate: false,
-        isAbsent: true,
         isExpired: true
       };
     }
     return { 
       available: false, 
       isLate: false,
-      isAbsent: false,
       isExpired: false
     };
   };
@@ -227,16 +216,34 @@ const AttendanceScreen = () => {
     // Check if clock-in is available based on time
     const timeCheck = isClockInAvailable();
     
-    // Check if current time is past 6:30 PM
+    // Check if current time is past 6:40 PM
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     const currentTime = currentHour + (currentMinute / 60);
     
-    if (currentTime >= WORK_END_TIME) {
+    if (currentTime >= EXTENDED_CLOCK_OUT_TIME) {
       Alert.alert(
         'Work Period Ended',
-        'The work period has ended (6:30 PM). You cannot clock in or out for today.',
+        'The work period has ended (6:40 PM). You cannot clock in or out for today.',
+        [
+          { 
+            text: 'OK', 
+            onPress: () => {
+              setSelectedEmployee(null);
+              setShowEmployeeSelector(true);
+            }
+          }
+        ]
+      );
+      return;
+    }
+    
+    // If trying to clock in after 6:30 PM
+    if (!employeeRecords.clockIn && currentTime >= WORK_END_TIME) {
+      Alert.alert(
+        'Work Period Ended',
+        'The work period has ended (6:30 PM). You cannot clock in for today.',
         [
           { 
             text: 'OK', 
@@ -251,15 +258,14 @@ const AttendanceScreen = () => {
     }
     
     if (!employeeRecords.clockIn && !timeCheck.available) {
-      if (timeCheck.isAbsent) {
+      if (timeCheck.isExpired) {
         Alert.alert(
-          'Marked as Absent',
-          'Clock-in period has ended. You will be marked as absent for today.',
+          'Attendance Period Expired',
+          'The attendance period has expired. You cannot clock in for today.',
           [
             { 
               text: 'OK', 
-              onPress: async () => {
-                await saveAttendanceRecord('absent', employee.id);
+              onPress: () => {
                 setSelectedEmployee(null);
                 setShowEmployeeSelector(true);
               }
@@ -655,7 +661,7 @@ const AttendanceScreen = () => {
                   !!employeeRecords.clockOut ||
                   isAuthenticating ||
                   currentTime < CLOCK_OUT_TIME ||
-                  currentTime >= WORK_END_TIME
+                  currentTime >= EXTENDED_CLOCK_OUT_TIME
                 }
                 loading={isAuthenticating && attendanceType === 'clockOut'}
                 style={[styles.button, {
@@ -664,7 +670,7 @@ const AttendanceScreen = () => {
                     (!employeeRecords.clockIn || 
                      !!employeeRecords.clockOut || 
                      currentTime < CLOCK_OUT_TIME ||
-                     currentTime >= WORK_END_TIME)
+                     currentTime >= EXTENDED_CLOCK_OUT_TIME)
                       ? 0.5
                       : 1
                 }]}
