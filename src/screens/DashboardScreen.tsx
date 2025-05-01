@@ -63,8 +63,21 @@ const DashboardScreen = () => {
         }
       }
       
-      // Get incidents count (mock data for now)
-      setIncidentsCount(Math.floor(Math.random() * 5) + 1); // Random 1-5
+      // Get incidents count from AsyncStorage
+      const incidentsData = await AsyncStorage.getItem('incident_reports');
+      if (incidentsData) {
+        const incidents = JSON.parse(incidentsData);
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Count incidents for today
+        const todayIncidents = incidents.filter((incident: any) => 
+          incident.date === today
+        );
+        
+        setIncidentsCount(todayIncidents.length);
+      } else {
+        setIncidentsCount(0);
+      }
       
     } catch (error) {
       console.error('Error loading dashboard data:', error);

@@ -4,6 +4,7 @@ import { Button, Avatar, TextInput, Chip, Divider } from 'react-native-paper';
 import { COLORS, SPACING, FONT_SIZES, SHADOWS } from '../utils/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { AntDesign } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const incidentTypes = [
   { id: '1', label: 'Theft', icon: 'wallet-outline' },
@@ -71,7 +72,7 @@ const ReportIncidentScreen = ({ navigation }: any) => {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isFormValid()) {
       Alert.alert('Missing Information', 'Please fill out all required fields');
       return;
@@ -79,12 +80,34 @@ const ReportIncidentScreen = ({ navigation }: any) => {
 
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // Get existing incidents
+      const existingIncidents = await AsyncStorage.getItem('incident_reports');
+      const incidents = existingIncidents ? JSON.parse(existingIncidents) : [];
+      
+      // Create new incident
+      const newIncident = {
+        id: Date.now().toString(),
+        type: selectedType,
+        title: incidentData.title,
+        description: incidentData.description,
+        location: incidentData.location,
+        date: incidentData.date,
+        time: incidentData.time,
+        images: images,
+        status: 'active',
+        createdAt: new Date().toISOString()
+      };
+      
+      // Add new incident to list
+      incidents.push(newIncident);
+      
+      // Save updated incidents list
+      await AsyncStorage.setItem('incident_reports', JSON.stringify(incidents));
+      
       Alert.alert(
         'Report Submitted',
-        'Your incident has been reported successfully. Reference #: 23458',
+        `Your incident has been reported successfully. Reference #: ${newIncident.id}`,
         [
           { 
             text: 'OK', 
@@ -92,7 +115,12 @@ const ReportIncidentScreen = ({ navigation }: any) => {
           }
         ]
       );
-    }, 1500);
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      Alert.alert('Error', 'Failed to submit incident report');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
