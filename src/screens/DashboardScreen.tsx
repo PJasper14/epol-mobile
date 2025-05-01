@@ -1,274 +1,449 @@
-import React from 'react';
-import { View, StyleSheet, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { Card, Title, Paragraph, Button, Avatar } from 'react-native-paper';
-import { COLORS, SPACING, FONT_SIZES, SHADOWS } from '../utils/theme';
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import { Card, Text, Avatar, IconButton, Title, Paragraph, Divider, ActivityIndicator, Surface } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { COLORS, SPACING, SHADOWS } from '../utils/theme';
 import { useAuth } from '../context/AuthContext';
 
-const DashboardScreen = ({ navigation }: any) => {
+type QuickActionProps = {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  color?: string;
+  disabled?: boolean;
+};
+
+const QuickAction = ({ icon, label, onPress, color = COLORS.primary, disabled = false }: QuickActionProps) => (
+  <TouchableOpacity 
+    style={[styles.quickAction, disabled && styles.quickActionDisabled]} 
+    onPress={onPress}
+    disabled={disabled}
+  >
+    <View style={[styles.quickActionIcon, { backgroundColor: `${color}15` }]}>
+      <Ionicons name={icon as any} size={24} color={color} />
+    </View>
+    <Text style={styles.quickActionLabel}>{label}</Text>
+  </TouchableOpacity>
+);
+
+const DashboardScreen = () => {
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
-
-  const renderStatsCard = () => (
-    <Card style={[styles.card, SHADOWS.medium]}>
-      <Card.Content>
-        <Title style={styles.cardTitle}>Today's Statistics</Title>
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>12</Text>
-            <Text style={styles.statLabel}>Reports</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>5</Text>
-            <Text style={styles.statLabel}>In Progress</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>7</Text>
-            <Text style={styles.statLabel}>Completed</Text>
-          </View>
-        </View>
-      </Card.Content>
-    </Card>
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [attendanceToday, setAttendanceToday] = useState<{ clockIn?: string; clockOut?: string } | null>(null);
+  const [incidentsCount, setIncidentsCount] = useState(0);
+  
+  // Load data when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      loadDashboardData();
+    }, [])
   );
 
-  const renderQuickActions = () => (
-    <Card style={[styles.card, SHADOWS.medium]}>
-      <Card.Content>
-        <Title style={styles.cardTitle}>Quick Actions</Title>
-        <View style={styles.quickActionsContainer}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('ReportIncident')}
-          >
-            <Avatar.Icon 
-              size={50} 
-              icon="clipboard-alert" 
-              color={COLORS.background}
-              style={{ backgroundColor: COLORS.primary }}
-            />
-            <Text style={styles.actionText}>Report</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('SearchDatabase')}
-          >
-            <Avatar.Icon 
-              size={50} 
-              icon="database-search" 
-              color={COLORS.background}
-              style={{ backgroundColor: COLORS.secondary }}
-            />
-            <Text style={styles.actionText}>Search</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('Map')}
-          >
-            <Avatar.Icon 
-              size={50} 
-              icon="map-marker" 
-              color={COLORS.background}
-              style={{ backgroundColor: COLORS.accent }}
-            />
-            <Text style={styles.actionText}>Map</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('Scanner')}
-          >
-            <Avatar.Icon 
-              size={50} 
-              icon="qrcode-scan" 
-              color={COLORS.background}
-              style={{ backgroundColor: COLORS.info }}
-            />
-            <Text style={styles.actionText}>Scan</Text>
-          </TouchableOpacity>
-        </View>
-      </Card.Content>
-    </Card>
-  );
-
-  const renderRecentActivities = () => (
-    <Card style={[styles.card, SHADOWS.medium]}>
-      <Card.Content>
-        <Title style={styles.cardTitle}>Recent Activities</Title>
-        <View style={styles.activitiesContainer}>
-          <View style={styles.activityItem}>
-            <Avatar.Icon 
-              size={40} 
-              icon="file-document" 
-              color={COLORS.background}
-              style={{ backgroundColor: COLORS.primary }}
-            />
-            <View style={styles.activityDetails}>
-              <Text style={styles.activityTitle}>Report #2204 Filed</Text>
-              <Text style={styles.activityTime}>Today, 10:45 AM</Text>
-            </View>
-          </View>
-          
-          <View style={styles.activityItem}>
-            <Avatar.Icon 
-              size={40} 
-              icon="check-circle" 
-              color={COLORS.background}
-              style={{ backgroundColor: COLORS.success }}
-            />
-            <View style={styles.activityDetails}>
-              <Text style={styles.activityTitle}>Case #1872 Closed</Text>
-              <Text style={styles.activityTime}>Yesterday, 4:30 PM</Text>
-            </View>
-          </View>
-          
-          <View style={styles.activityItem}>
-            <Avatar.Icon 
-              size={40} 
-              icon="account-search" 
-              color={COLORS.background}
-              style={{ backgroundColor: COLORS.info }}
-            />
-            <View style={styles.activityDetails}>
-              <Text style={styles.activityTitle}>Database Search Performed</Text>
-              <Text style={styles.activityTime}>Yesterday, 2:15 PM</Text>
-            </View>
-          </View>
-        </View>
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Get attendance data
+      const attendanceData = await AsyncStorage.getItem('attendance_records');
+      if (attendanceData) {
+        const records = JSON.parse(attendanceData);
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         
-        <Button 
-          mode="text" 
-          onPress={() => navigation.navigate('Activities')}
-          style={styles.viewAllButton}
-        >
-          View All Activities
-        </Button>
-      </Card.Content>
-    </Card>
-  );
+        if (records[today]) {
+          setAttendanceToday(records[today]);
+        } else {
+          setAttendanceToday(null);
+        }
+      }
+      
+      // Get incidents count (mock data for now)
+      setIncidentsCount(Math.floor(Math.random() * 5) + 1); // Random 1-5
+      
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      Alert.alert('Error', 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadDashboardData();
+  };
+
+  const navigateToAttendance = () => {
+    navigation.navigate('AttendanceTab', { screen: 'Attendance' });
+  };
+
+  const navigateToReportIncident = () => {
+    navigation.navigate('SafeguardingTab', { screen: 'ReportIncident' });
+  };
+
+  // const navigateToMap = () => {
+  //   navigation.navigate('MapTab', { screen: 'Map' });
+  // };
+
+  const navigateToProfile = () => {
+    navigation.navigate('ProfileTab', { screen: 'Profile' });
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading dashboard...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello,</Text>
-          <Text style={styles.userName}>{user?.name || 'Officer'}</Text>
-        </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-          <Avatar.Text 
-            size={50} 
-            label={user?.name?.charAt(0) || 'U'} 
-            color={COLORS.background}
-            style={{ backgroundColor: COLORS.primary }}
-          />
-        </TouchableOpacity>
-      </View>
-      
+    <SafeAreaView style={styles.container}>
       <ScrollView 
         style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+        }
       >
-        {renderStatsCard()}
-        {renderQuickActions()}
-        {renderRecentActivities()}
+        {/* Header Section */}
+        <Surface style={styles.header}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.welcomeText}>Welcome,</Text>
+              <Text style={styles.nameText}>{user?.displayName || 'Officer'}</Text>
+            </View>
+            <TouchableOpacity onPress={navigateToProfile}>
+              <Avatar.Text 
+                size={40} 
+                label={(user?.displayName || 'U').substring(0, 1).toUpperCase()} 
+                style={{ backgroundColor: COLORS.primary }}
+              />
+            </TouchableOpacity>
+          </View>
+        </Surface>
+
+        {/* Date and Current Status */}
+        <Surface style={styles.statusCard}>
+          <View style={styles.dateContainer}>
+            <Text style={styles.dateText}>
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </Text>
+          </View>
+
+          <View style={styles.statusContainer}>
+            <View style={styles.statusItem}>
+              <Text style={styles.statusLabel}>Attendance Status</Text>
+              <View style={styles.statusValue}>
+                <Ionicons 
+                  name={attendanceToday?.clockIn ? "checkmark-circle" : "alert-circle-outline"} 
+                  size={18} 
+                  color={attendanceToday?.clockIn ? COLORS.success : COLORS.warning} 
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={{ 
+                  fontWeight: 'bold',
+                  color: attendanceToday?.clockIn ? COLORS.success : COLORS.warning
+                }}>
+                  {attendanceToday?.clockIn 
+                    ? (attendanceToday?.clockOut ? 'Completed' : 'Clocked In') 
+                    : 'Not Clocked In'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.statusDivider} />
+
+            <View style={styles.statusItem}>
+              <Text style={styles.statusLabel}>Reports Today</Text>
+              <View style={styles.statusValue}>
+                <Ionicons 
+                  name="document-text-outline" 
+                  size={18} 
+                  color={COLORS.primary} 
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={{ fontWeight: 'bold', color: COLORS.primary }}>
+                  {incidentsCount} Incidents
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Surface>
+
+        {/* Quick Actions */}
+        <Card style={styles.actionsCard}>
+          <Card.Content>
+            <Title style={styles.sectionTitle}>Quick Actions</Title>
+            <View style={styles.quickActionsContainer}>
+              <QuickAction 
+                icon="finger-print" 
+                label="Attendance" 
+                onPress={navigateToAttendance} 
+              />
+              <QuickAction 
+                icon="shield-outline" 
+                label="Report Incident" 
+                onPress={navigateToReportIncident} 
+              />
+              {/* <QuickAction 
+                icon="map-outline" 
+                label="Map" 
+                onPress={navigateToMap} 
+              /> */}
+              <QuickAction 
+                icon="person-outline" 
+                label="Profile" 
+                onPress={navigateToProfile} 
+              />
+            </View>
+          </Card.Content>
+        </Card>
+
+        {/* Attendance Card */}
+        <Card style={styles.card} onPress={navigateToAttendance}>
+          <Card.Content>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Ionicons name="finger-print" size={24} color={COLORS.primary} />
+                <Title style={styles.cardTitle}>Today's Attendance</Title>
+              </View>
+              <IconButton 
+                icon="chevron-right" 
+                size={24} 
+                iconColor={COLORS.text.secondary}
+              />
+            </View>
+            <Divider style={styles.divider} />
+            
+            <View style={styles.attendanceDetails}>
+              <View style={styles.attendanceItem}>
+                <Text style={styles.attendanceLabel}>Clock In</Text>
+                <Text style={styles.attendanceValue}>
+                  {attendanceToday?.clockIn || 'Not recorded'}
+                </Text>
+              </View>
+              
+              <View style={styles.attendanceItem}>
+                <Text style={styles.attendanceLabel}>Clock Out</Text>
+                <Text style={styles.attendanceValue}>
+                  {attendanceToday?.clockOut || 'Not recorded'}
+                </Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+
+        {/* Safeguarding Card */}
+        <Card style={styles.card} onPress={navigateToReportIncident}>
+          <Card.Content>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <MaterialCommunityIcons name="shield-alert-outline" size={24} color={COLORS.primary} />
+                <Title style={styles.cardTitle}>Safeguarding</Title>
+              </View>
+              <IconButton 
+                icon="chevron-right" 
+                size={24} 
+                iconColor={COLORS.text.secondary}
+              />
+            </View>
+            <Divider style={styles.divider} />
+            
+            <Paragraph style={styles.safeguardingText}>
+              Report environmental incidents and violations. Your reports help protect our environment.
+            </Paragraph>
+            
+            <TouchableOpacity 
+              style={styles.reportButton}
+              onPress={navigateToReportIncident}
+            >
+              <Text style={styles.reportButtonText}>REPORT INCIDENT</Text>
+            </TouchableOpacity>
+          </Card.Content>
+        </Card>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.l,
-    paddingTop: SPACING.xl,
-    paddingBottom: SPACING.m,
-    backgroundColor: COLORS.background,
-  },
-  greeting: {
-    fontSize: FONT_SIZES.body,
-    color: COLORS.text.secondary,
-  },
-  userName: {
-    fontSize: FONT_SIZES.h1,
-    fontWeight: 'bold',
-    color: COLORS.text.primary,
-    marginTop: SPACING.xs,
+    backgroundColor: '#f5f5f5',
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: SPACING.l,
   },
-  card: {
-    marginBottom: SPACING.l,
-    borderRadius: 12,
+  header: {
+    backgroundColor: COLORS.primary,
+    padding: SPACING.l,
+    elevation: 4,
   },
-  cardTitle: {
-    fontSize: FONT_SIZES.h2,
-    marginBottom: SPACING.m,
-    color: COLORS.text.primary,
-  },
-  statsContainer: {
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: SPACING.s,
-  },
-  statItem: {
     alignItems: 'center',
+  },
+  welcomeText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  nameText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  statusCard: {
+    margin: SPACING.m,
+    borderRadius: 8,
+    overflow: 'hidden',
+    elevation: 2,
+  },
+  dateContainer: {
+    padding: SPACING.m,
+    backgroundColor: '#FFEBEE',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFCDD2',
+  },
+  dateText: {
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    padding: SPACING.m,
+  },
+  statusItem: {
     flex: 1,
   },
-  statValue: {
-    fontSize: FONT_SIZES.h1,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+  statusDivider: {
+    width: 1,
+    backgroundColor: COLORS.divider,
+    marginHorizontal: SPACING.m,
   },
-  statLabel: {
-    fontSize: FONT_SIZES.caption,
+  statusLabel: {
+    fontSize: 12,
     color: COLORS.text.secondary,
-    marginTop: SPACING.xs,
+    marginBottom: 4,
+  },
+  statusValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionsCard: {
+    margin: SPACING.m,
+    marginTop: 0,
+    borderRadius: 8,
+    ...SHADOWS.small,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    marginBottom: SPACING.m,
+    color: COLORS.text.primary,
   },
   quickActionsContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
-  actionButton: {
-    alignItems: 'center',
+  quickAction: {
     width: '22%',
+    alignItems: 'center',
     marginBottom: SPACING.m,
   },
-  actionText: {
-    fontSize: FONT_SIZES.small,
-    marginTop: SPACING.xs,
-    color: COLORS.text.primary,
+  quickActionDisabled: {
+    opacity: 0.5,
   },
-  activitiesContainer: {
-    marginTop: SPACING.s,
+  quickActionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  activityItem: {
+  quickActionLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: COLORS.text.secondary,
+  },
+  card: {
+    margin: SPACING.m,
+    marginTop: 0,
+    borderRadius: 8,
+    ...SHADOWS.small,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.m,
   },
-  activityDetails: {
-    marginLeft: SPACING.m,
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: FONT_SIZES.body,
+  cardTitle: {
+    fontSize: 18,
+    marginLeft: SPACING.s,
     color: COLORS.text.primary,
   },
-  activityTime: {
-    fontSize: FONT_SIZES.small,
-    color: COLORS.text.secondary,
-    marginTop: SPACING.xs,
+  divider: {
+    marginVertical: SPACING.m,
   },
-  viewAllButton: {
-    marginTop: SPACING.s,
+  attendanceDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  attendanceItem: {
+    flex: 1,
+  },
+  attendanceLabel: {
+    fontSize: 14,
+    color: COLORS.text.secondary,
+    marginBottom: 4,
+  },
+  attendanceValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.text.primary,
+  },
+  safeguardingText: {
+    marginBottom: SPACING.m,
+    color: COLORS.text.secondary,
+    lineHeight: 20,
+  },
+  reportButton: {
+    backgroundColor: COLORS.primary,
+    padding: SPACING.m,
+    borderRadius: 4,
+    alignItems: 'center',
+  },
+  reportButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: SPACING.m,
+    color: COLORS.text.secondary,
   },
 });
 

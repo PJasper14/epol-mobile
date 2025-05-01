@@ -1,12 +1,15 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface User {
+export type UserRole = 'team_leader' | 'street_sweeper';
+
+export type User = {
   id: string;
+  name?: string;
   email: string;
-  name: string;
-  role: string;
-}
+  displayName?: string;
+  role: UserRole;
+};
 
 interface AuthContextType {
   user: User | null;
@@ -57,19 +60,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // For demo purposes, we'll use a timeout and mock data
       return new Promise((resolve) => {
         setTimeout(() => {
-          // Mock successful authentication for specific credentials
-          if (email === 'user@example.com' && password === 'password') {
+          // Mock successful authentication for different roles
+          if (email === 'leader@example.com' && password === 'password') {
             const userData: User = {
               id: '1',
               email: email,
-              name: 'Demo User',
-              role: 'officer',
+              name: 'Team Leader',
+              role: 'team_leader',
             };
             
-            // Save to AsyncStorage
             AsyncStorage.setItem('user', JSON.stringify(userData));
+            setUser(userData);
+            setLoading(false);
+            resolve(true);
+          } else if (email === 'sweeper@example.com' && password === 'password') {
+            const userData: User = {
+              id: '2',
+              email: email,
+              name: 'Street Sweeper',
+              role: 'street_sweeper',
+            };
             
-            // Update state
+            AsyncStorage.setItem('user', JSON.stringify(userData));
             setUser(userData);
             setLoading(false);
             resolve(true);
@@ -88,10 +100,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
-      // Clear from AsyncStorage
       await AsyncStorage.removeItem('user');
-      
-      // Update state
       setUser(null);
     } catch (error) {
       console.error('Logout error:', error);

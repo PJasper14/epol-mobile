@@ -4,7 +4,7 @@ import { COLORS, SPACING, FONT_SIZES } from '../utils/theme';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import { useAuth } from '../context/AuthContext';
-import { Avatar } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
 
 const LoginScreen = ({ navigation }: any) => {
   const { login, loading: authLoading } = useAuth();
@@ -17,6 +17,7 @@ const LoginScreen = ({ navigation }: any) => {
     email: '',
     password: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (field: string, value: string) => {
     setCredentials(prev => ({
@@ -92,6 +93,10 @@ const LoginScreen = ({ navigation }: any) => {
     );
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -100,14 +105,11 @@ const LoginScreen = ({ navigation }: any) => {
     >
       <ScrollView contentContainerStyle={styles.scrollView}>
         <View style={styles.logoContainer}>
-          <Avatar.Icon
-            size={120}
-            icon="shield-account"
-            color={COLORS.background}
-            style={{ backgroundColor: COLORS.primary }}
+          <Image
+            source={require('../../assets/images/EPOL LOGO.png')}
+            style={styles.logo}
+            resizeMode="contain"
           />
-          <Text style={styles.appName}>E-Police</Text>
-          <Text style={styles.appTagline}>Mobile Policing Platform</Text>
         </View>
 
         <View style={styles.formContainer}>
@@ -127,9 +129,17 @@ const LoginScreen = ({ navigation }: any) => {
             placeholder="Enter your password"
             value={credentials.password}
             onChangeText={(text) => handleChange('password', text)}
-            secureTextEntry
+            secureTextEntry={!showPassword}
             error={errors.password}
             touched={!!credentials.password || errors.password !== ''}
+            rightIcon={
+              <Ionicons 
+                name={showPassword ? 'eye-off' : 'eye'} 
+                size={24} 
+                color={COLORS.text.secondary}
+              />
+            }
+            onPressRightIcon={togglePasswordVisibility}
           />
 
           <Button
@@ -148,11 +158,11 @@ const LoginScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
         
-        <View style={styles.demoCredentials}>
+        {/* <View style={styles.demoCredentials}>
           <Text style={styles.demoTitle}>Demo Credentials</Text>
           <Text style={styles.demoText}>Email: user@example.com</Text>
           <Text style={styles.demoText}>Password: password</Text>
-        </View>
+        </View> */}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -173,8 +183,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
   },
   logo: {
-    width: 120,
-    height: 120,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
   },
   appName: {
     fontSize: FONT_SIZES.h1,

@@ -59,7 +59,7 @@ const RootNavigator = () => {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <PaperProvider>
+      <PaperProvider theme={theme}>
         <AuthProvider>
           <NavigationContainer>
             <StatusBar style="auto" />

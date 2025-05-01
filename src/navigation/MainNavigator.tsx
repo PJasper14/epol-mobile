@@ -2,13 +2,15 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
 
 // Screens
 import DashboardScreen from '../screens/DashboardScreen';
 import MapScreen from '../screens/MapScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ReportIncidentScreen from '../screens/ReportIncidentScreen';
+import AttendanceScreen from '../screens/AttendanceScreen';
 
 // Theme
 import { COLORS } from '../utils/theme';
@@ -20,6 +22,17 @@ type DashboardStackParamList = {
   Activities: undefined;
   SearchDatabase: undefined;
   Scanner: undefined;
+};
+
+type AttendanceStackParamList = {
+  Attendance: undefined;
+  AttendanceHistory: undefined;
+};
+
+type SafeguardingStackParamList = {
+  ReportIncident: undefined;
+  IncidentsList: undefined;
+  IncidentDetails: { id: string };
 };
 
 type MapStackParamList = {
@@ -38,6 +51,8 @@ type ProfileStackParamList = {
 
 // Create stacks
 const DashboardStack = createStackNavigator<DashboardStackParamList>();
+const AttendanceStack = createStackNavigator<AttendanceStackParamList>();
+const SafeguardingStack = createStackNavigator<SafeguardingStackParamList>();
 const MapStack = createStackNavigator<MapStackParamList>();
 const ProfileStack = createStackNavigator<ProfileStackParamList>();
 
@@ -46,8 +61,21 @@ const DashboardStackNavigator = () => (
   <DashboardStack.Navigator screenOptions={{ headerShown: false }}>
     <DashboardStack.Screen name="Dashboard" component={DashboardScreen} />
     <DashboardStack.Screen name="ReportIncident" component={ReportIncidentScreen} />
-    {/* Add other dashboard related screens here */}
   </DashboardStack.Navigator>
+);
+
+// Attendance Stack Navigator
+const AttendanceStackNavigator = () => (
+  <AttendanceStack.Navigator screenOptions={{ headerShown: false }}>
+    <AttendanceStack.Screen name="Attendance" component={AttendanceScreen} />
+  </AttendanceStack.Navigator>
+);
+
+// Safeguarding Stack Navigator
+const SafeguardingStackNavigator = () => (
+  <SafeguardingStack.Navigator screenOptions={{ headerShown: false }}>
+    <SafeguardingStack.Screen name="ReportIncident" component={ReportIncidentScreen} />
+  </SafeguardingStack.Navigator>
 );
 
 // Map Stack Navigator
@@ -55,7 +83,6 @@ const MapStackNavigator = () => (
   <MapStack.Navigator screenOptions={{ headerShown: false }}>
     <MapStack.Screen name="Map" component={MapScreen} />
     <MapStack.Screen name="ReportIncident" component={ReportIncidentScreen} />
-    {/* Add other map related screens here */}
   </MapStack.Navigator>
 );
 
@@ -63,7 +90,6 @@ const MapStackNavigator = () => (
 const ProfileStackNavigator = () => (
   <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
     <ProfileStack.Screen name="Profile" component={ProfileScreen} />
-    {/* Add other profile related screens here */}
   </ProfileStack.Navigator>
 );
 
@@ -72,7 +98,7 @@ const Tab = createBottomTabNavigator();
 
 const getTabBarVisibility = (route: any) => {
   const routeName = getFocusedRouteNameFromRoute(route) ?? 'Dashboard';
-  const hideOnScreens = ['ReportIncident', 'Scanner'];
+  const hideOnScreens = ['ReportIncident', 'Scanner', 'IncidentDetails'];
   
   if (hideOnScreens.includes(routeName)) {
     return false;
@@ -82,6 +108,9 @@ const getTabBarVisibility = (route: any) => {
 };
 
 const MainNavigator = () => {
+  const { user } = useAuth();
+  const isTeamLeader = user?.role === 'team_leader';
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -91,15 +120,23 @@ const MainNavigator = () => {
 
           if (route.name === 'DashboardTab') {
             iconName = focused ? 'home' : 'home-outline';
+            return <Ionicons name={iconName as any} size={size} color={color} />;
+          } else if (route.name === 'AttendanceTab') {
+            iconName = focused ? 'finger-print' : 'finger-print-outline';
+            return <Ionicons name={iconName as any} size={size} color={color} />;
+          } else if (route.name === 'SafeguardingTab') {
+            iconName = focused ? 'shield-check' : 'shield-outline';
+            return <MaterialCommunityIcons name={iconName as any} size={size} color={color} />;
           } else if (route.name === 'MapTab') {
             iconName = focused ? 'map' : 'map-outline';
+            return <Ionicons name={iconName as any} size={size} color={color} />;
           } else if (route.name === 'ProfileTab') {
             iconName = focused ? 'person' : 'person-outline';
+            return <Ionicons name={iconName as any} size={size} color={color} />;
           } else {
             iconName = 'alert-circle';
+            return <Ionicons name={iconName as any} size={size} color={color} />;
           }
-
-          return <Ionicons name={iconName as any} size={size} color={color} />;
         },
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.text.secondary,
@@ -116,22 +153,44 @@ const MainNavigator = () => {
         },
       })}
     >
+      {isTeamLeader && (
+        <Tab.Screen 
+          name="DashboardTab" 
+          component={DashboardStackNavigator}
+          options={({ route }) => ({
+            tabBarLabel: 'Home',
+            tabBarVisible: getTabBarVisibility(route),
+          })}
+        />
+      )}
       <Tab.Screen 
-        name="DashboardTab" 
-        component={DashboardStackNavigator}
+        name="AttendanceTab" 
+        component={AttendanceStackNavigator}
         options={({ route }) => ({
-          tabBarLabel: 'Home',
+          tabBarLabel: 'Attendance',
           tabBarVisible: getTabBarVisibility(route),
         })}
       />
-      <Tab.Screen 
-        name="MapTab" 
-        component={MapStackNavigator}
-        options={({ route }) => ({
-          tabBarLabel: 'Map',
-          tabBarVisible: getTabBarVisibility(route),
-        })}
-      />
+      {isTeamLeader && (
+        <>
+          <Tab.Screen 
+            name="SafeguardingTab" 
+            component={SafeguardingStackNavigator}
+            options={({ route }) => ({
+              tabBarLabel: 'Safeguarding',
+              tabBarVisible: getTabBarVisibility(route),
+            })}
+          />
+          <Tab.Screen 
+            name="MapTab" 
+            component={MapStackNavigator}
+            options={({ route }) => ({
+              tabBarLabel: 'Map',
+              tabBarVisible: getTabBarVisibility(route),
+            })}
+          />
+        </>
+      )}
       <Tab.Screen 
         name="ProfileTab" 
         component={ProfileStackNavigator}

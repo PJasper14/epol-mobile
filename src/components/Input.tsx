@@ -5,7 +5,8 @@ import {
   StyleSheet, 
   Text, 
   TextInputProps, 
-  TouchableOpacity 
+  TouchableOpacity,
+  useWindowDimensions
 } from 'react-native';
 import { COLORS, SPACING, BORDER_RADIUS, FONT_SIZES } from '../utils/theme';
 
@@ -31,6 +32,8 @@ const Input: React.FC<InputProps> = ({
   ...rest
 }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 380;
 
   const hasError = !!error && touched;
 
@@ -40,22 +43,28 @@ const Input: React.FC<InputProps> = ({
     return COLORS.divider;
   };
 
+  // Calculate responsive dimensions
+  const inputHeight = isSmallScreen ? 44 : 48;
+  const fontSize = isSmallScreen ? FONT_SIZES.body * 0.9 : FONT_SIZES.body;
+  const labelSize = isSmallScreen ? FONT_SIZES.caption * 0.9 : FONT_SIZES.caption;
+
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, { fontSize: labelSize }]}>{label}</Text>}
       <View
         style={[
           styles.inputContainer,
           {
             borderColor: getBorderColor(),
             backgroundColor: rest.editable === false ? COLORS.divider : COLORS.background,
+            height: inputHeight,
           },
           style,
         ]}
       >
         {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
         <TextInput
-          style={styles.input}
+          style={[styles.input, { fontSize }]}
           placeholder={placeholder}
           placeholderTextColor={COLORS.text.disabled}
           value={value}
@@ -82,9 +91,9 @@ const Input: React.FC<InputProps> = ({
 const styles = StyleSheet.create({
   container: {
     marginBottom: SPACING.m,
+    width: '100%',
   },
   label: {
-    fontSize: FONT_SIZES.caption,
     fontWeight: '500',
     color: COLORS.text.primary,
     marginBottom: SPACING.xs,
@@ -95,11 +104,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: BORDER_RADIUS.m,
     paddingHorizontal: SPACING.m,
-    height: 48,
   },
   input: {
     flex: 1,
-    fontSize: FONT_SIZES.body,
     color: COLORS.text.primary,
     paddingVertical: SPACING.s,
   },
