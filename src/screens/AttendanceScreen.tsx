@@ -601,34 +601,31 @@ const AttendanceScreen = () => {
               </View>
             )}
             
-            {employeeRecords.clockIn && timeElapsed >= FOUR_HOURS_MS && (
+            {/* Only show a message if the attendance period has truly expired or work period ended */}
+            {employeeRecords.clockIn && !employeeRecords.clockOut && timeElapsed >= FOUR_HOURS_MS && currentTime >= EXTENDED_CLOCK_OUT_TIME ? (
               <View style={{ alignItems: 'center', marginVertical: 16 }}>
                 <Text style={{ fontSize: 18, color: COLORS.error, fontWeight: 'bold' }}>
                   Attendance period has expired
                 </Text>
                 <Text style={{ fontSize: 14, color: COLORS.text.secondary, marginTop: 8 }}>
-                  You cannot clock in or out for today
+                  You cannot clock in for today
                 </Text>
               </View>
-            )}
-            
-            {currentTime >= WORK_END_TIME && (
-              <View style={{ alignItems: 'center', marginVertical: 16 }}>
-                <Text style={{ fontSize: 18, color: COLORS.error, fontWeight: 'bold' }}>
-                  Work Period Ended
-                </Text>
-                <Text style={{ fontSize: 14, color: COLORS.text.secondary, marginTop: 8 }}>
-                  The work period has ended (6:30 PM). You cannot clock in or out for today.
-                </Text>
-              </View>
-            )}
-            
-            {employeeRecords.clockIn && !employeeRecords.clockOut && currentTime < CLOCK_OUT_TIME && (
-              <View style={{ alignItems: 'center', marginVertical: 16 }}>
-                <Text style={{ fontSize: 14, color: COLORS.text.secondary, marginTop: 8 }}>
-                  Clock out will be available at 6:30 PM
-                </Text>
-              </View>
+            ) : (
+              <>
+                {/* Only show 'Work Period Ended' if not clocked in or clocked out and work period is over */}
+                {(!employeeRecords.clockIn || !!employeeRecords.clockOut) && currentTime >= WORK_END_TIME && (
+                  <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                    <Text style={{ fontSize: 18, color: COLORS.error, fontWeight: 'bold' }}>
+                      Work Period Ended
+                    </Text>
+                    <Text style={{ fontSize: 14, color: COLORS.text.secondary, marginTop: 8 }}>
+                      The work period has ended (6:30 PM). You cannot clock in or out for today.
+                    </Text>
+                  </View>
+                )}
+                {/* No message if just waiting for timer to expire and clock out is still possible */}
+              </>
             )}
             
             <View style={styles.buttonContainer}>
