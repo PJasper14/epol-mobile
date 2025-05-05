@@ -94,11 +94,15 @@ const DashboardScreen = () => {
   };
 
   const navigateToAttendance = () => {
-    navigation.navigate('AttendanceTab', { screen: 'Attendance' });
+    navigation.navigate('Attendance', { screen: 'Attendance' });
   };
 
   const navigateToReportIncident = () => {
-    navigation.navigate('SafeguardingTab', { screen: 'ReportIncident' });
+    navigation.navigate('ReportIncident', { screen: 'ReportIncident' });
+  };
+
+  const navigateToRemarks = () => {
+    navigation.navigate('Remarks', { screen: 'Remarks' });
   };
 
   // const navigateToMap = () => {
@@ -205,12 +209,20 @@ const DashboardScreen = () => {
                 icon="finger-print" 
                 label="Attendance" 
                 onPress={navigateToAttendance} 
+                disabled={!!attendanceToday?.clockOut}
               />
               <QuickAction 
-                icon="shield-outline" 
+                icon="shield-check" 
                 label="Report Incident" 
                 onPress={navigateToReportIncident} 
               />
+              {user?.role === 'team_leader' && (
+                <QuickAction 
+                  icon="document-text" 
+                  label="Remarks" 
+                  onPress={navigateToRemarks} 
+                />
+              )}
               {/* <QuickAction 
                 icon="map-outline" 
                 label="Map" 
