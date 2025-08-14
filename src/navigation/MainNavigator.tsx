@@ -156,49 +156,72 @@ const MainNavigator = () => {
         headerShown: false,
       })}
     >
-      <Tab.Screen
-        name="Dashboard"
-        component={DashboardStackNavigator}
-        options={({ route }) => ({
-          tabBarStyle: {
-            display: getTabBarVisibility(route) ? 'flex' : 'none',
-          },
-        })}
-      />
-      <Tab.Screen
-        name="Attendance"
-        component={AttendanceStackNavigator}
-        options={({ route }) => ({
-          tabBarStyle: {
-            display: getTabBarVisibility(route) ? 'flex' : 'none',
-          },
-        })}
-      />
-      <Tab.Screen
-        name="ReportIncident"
-        component={ReportIncidentStackNavigator}
-        options={{
-          title: 'Report',
-        }}
-      />
-      {isTeamLeader && (
-        <Tab.Screen
-          name="Remarks"
-          component={RemarksStackNavigator}
-          options={{
-            title: 'Remarks',
-          }}
-        />
+      {isTeamLeader ? (
+        <>
+          <Tab.Screen
+            name="Dashboard"
+            component={DashboardStackNavigator}
+            options={({ route }) => ({
+              tabBarStyle: {
+                display: getTabBarVisibility(route) ? 'flex' : 'none',
+              },
+            })}
+          />
+          <Tab.Screen
+            name="Attendance"
+            component={AttendanceStackNavigator}
+            options={({ route }) => ({
+              tabBarStyle: {
+                display: getTabBarVisibility(route) ? 'flex' : 'none',
+              },
+            })}
+          />
+          <Tab.Screen
+            name="ReportIncident"
+            component={ReportIncidentStackNavigator}
+            options={{
+              title: 'Report',
+            }}
+          />
+          <Tab.Screen
+            name="Remarks"
+            component={RemarksStackNavigator}
+            options={{
+              title: 'Remarks',
+            }}
+          />
+          <Tab.Screen
+            name="Profile"
+            component={ProfileStackNavigator}
+            options={({ route }) => ({
+              tabBarStyle: {
+                display: getTabBarVisibility(route) ? 'flex' : 'none',
+              },
+            })}
+          />
+        </>
+      ) : (
+        <>
+          <Tab.Screen
+            name="Attendance"
+            component={AttendanceStackNavigator}
+            options={({ route }) => ({
+              tabBarStyle: {
+                display: getTabBarVisibility(route) ? 'flex' : 'none',
+              },
+            })}
+          />
+          <Tab.Screen
+            name="Profile"
+            component={ProfileStackNavigator}
+            options={({ route }) => ({
+              tabBarStyle: {
+                display: getTabBarVisibility(route) ? 'flex' : 'none',
+              },
+            })}
+          />
+        </>
       )}
-      <Tab.Screen
-        name="Profile"
-        component={ProfileStackNavigator}
-        options={({ route }) => ({
-          tabBarStyle: {
-            display: getTabBarVisibility(route) ? 'flex' : 'none',
-          },
-        })}
-      />
     </Tab.Navigator>
   );
 };
