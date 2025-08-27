@@ -105,6 +105,10 @@ const DashboardScreen = () => {
     navigation.navigate('Remarks', { screen: 'Remarks' });
   };
 
+  const navigateToInventoryRequest = () => {
+    navigation.navigate('InventoryRequest', { screen: 'InventoryRequest' });
+  };
+
   // const navigateToMap = () => {
   //   navigation.navigate('MapTab', { screen: 'Map' });
   // };
@@ -200,10 +204,10 @@ const DashboardScreen = () => {
           </View>
         </Surface>
 
-        {/* Quick Actions */}
+        {/* Quick Actions - Only for essential daily tasks */}
         <Card style={styles.actionsCard}>
           <Card.Content>
-            <Title style={styles.sectionTitle}>Quick Actions</Title>
+            <Title style={styles.sectionTitle}>Daily Tasks</Title>
             <View style={styles.quickActionsContainer}>
               <QuickAction 
                 icon="finger-print" 
@@ -219,20 +223,10 @@ const DashboardScreen = () => {
               {user?.role === 'team_leader' && (
                 <QuickAction 
                   icon="document-text" 
-                  label="Remarks" 
+                  label="Validation" 
                   onPress={navigateToRemarks} 
                 />
               )}
-              {/* <QuickAction 
-                icon="map-outline" 
-                label="Map" 
-                onPress={navigateToMap} 
-              /> */}
-              <QuickAction 
-                icon="person-outline" 
-                label="Profile" 
-                onPress={navigateToProfile} 
-              />
             </View>
           </Card.Content>
         </Card>
@@ -318,11 +312,11 @@ const styles = StyleSheet.create({
   },
   quickActionsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     flexWrap: 'wrap',
   },
   quickAction: {
-    width: '22%',
+    width: '30%',
     alignItems: 'center',
     marginBottom: SPACING.m,
   },

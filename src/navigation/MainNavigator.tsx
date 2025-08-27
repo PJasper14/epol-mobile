@@ -11,6 +11,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ReportIncidentScreen from '../screens/ReportIncidentScreen';
 import AttendanceScreen from '../screens/AttendanceScreen';
 import TeamLeaderValidationScreen from '../screens/TeamLeaderValidationScreen';
+import InventoryRequestScreen from '../screens/InventoryRequestScreen';
 
 // Theme
 import { COLORS } from '../utils/theme';
@@ -40,6 +41,10 @@ type RemarksStackParamList = {
   ValidationHistory: undefined;
 };
 
+type InventoryRequestStackParamList = {
+  InventoryRequest: undefined;
+};
+
 type ProfileStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
@@ -54,6 +59,7 @@ const DashboardStack = createStackNavigator<DashboardStackParamList>();
 const AttendanceStack = createStackNavigator<AttendanceStackParamList>();
 const ReportIncidentStack = createStackNavigator<ReportIncidentStackParamList>();
 const RemarksStack = createStackNavigator<RemarksStackParamList>();
+const InventoryRequestStack = createStackNavigator<InventoryRequestStackParamList>();
 const ProfileStack = createStackNavigator<ProfileStackParamList>();
 
 // Dashboard Stack Navigator
@@ -104,6 +110,26 @@ const RemarksStackNavigator = () => (
   </RemarksStack.Navigator>
 );
 
+// Inventory Request Stack Navigator
+const InventoryRequestStackNavigator = () => (
+  <InventoryRequestStack.Navigator>
+    <InventoryRequestStack.Screen
+      name="InventoryRequest"
+      component={InventoryRequestScreen}
+      options={{
+        title: 'Request Inventory',
+        headerStyle: {
+          backgroundColor: COLORS.primary,
+        },
+        headerTintColor: '#FFFFFF',
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      }}
+    />
+  </InventoryRequestStack.Navigator>
+);
+
 // Profile Stack Navigator
 const ProfileStackNavigator = () => (
   <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
@@ -135,7 +161,7 @@ const MainNavigator = () => {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap;
 
-          if (route.name === 'Dashboard') {
+          if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Attendance') {
             iconName = focused ? 'finger-print' : 'finger-print-outline';
@@ -143,6 +169,8 @@ const MainNavigator = () => {
             iconName = focused ? 'shield-checkmark' : 'shield-outline';
           } else if (route.name === 'Remarks') {
             iconName = focused ? 'document-text' : 'document-text-outline';
+          } else if (route.name === 'InventoryRequest') {
+            iconName = focused ? 'cube' : 'cube-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           } else {
@@ -159,7 +187,7 @@ const MainNavigator = () => {
       {isTeamLeader ? (
         <>
           <Tab.Screen
-            name="Dashboard"
+            name="Home"
             component={DashboardStackNavigator}
             options={({ route }) => ({
               tabBarStyle: {
@@ -170,24 +198,34 @@ const MainNavigator = () => {
           <Tab.Screen
             name="Attendance"
             component={AttendanceStackNavigator}
-            options={({ route }) => ({
-              tabBarStyle: {
-                display: getTabBarVisibility(route) ? 'flex' : 'none',
-              },
-            })}
+            options={{
+              tabBarButton: () => null,
+              tabBarStyle: { display: 'none' },
+            }}
           />
           <Tab.Screen
             name="ReportIncident"
             component={ReportIncidentStackNavigator}
             options={{
               title: 'Report',
+              tabBarButton: () => null,
+              tabBarStyle: { display: 'none' },
             }}
           />
           <Tab.Screen
             name="Remarks"
             component={RemarksStackNavigator}
             options={{
-              title: 'Remarks',
+              title: 'Validation',
+              tabBarButton: () => null,
+              tabBarStyle: { display: 'none' },
+            }}
+          />
+          <Tab.Screen
+            name="InventoryRequest"
+            component={InventoryRequestStackNavigator}
+            options={{
+              title: 'Request Items',
             }}
           />
           <Tab.Screen
