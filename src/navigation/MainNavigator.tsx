@@ -166,7 +166,7 @@ const MainNavigator = () => {
           } else if (route.name === 'Attendance') {
             iconName = focused ? 'finger-print' : 'finger-print-outline';
           } else if (route.name === 'ReportIncident') {
-            iconName = focused ? 'shield-checkmark' : 'shield-outline';
+            iconName = focused ? 'warning' : 'warning-outline';
           } else if (route.name === 'Remarks') {
             iconName = focused ? 'document-text' : 'document-text-outline';
           } else if (route.name === 'InventoryRequest') {
@@ -206,11 +206,12 @@ const MainNavigator = () => {
           <Tab.Screen
             name="ReportIncident"
             component={ReportIncidentStackNavigator}
-            options={{
-              title: 'Report',
-              tabBarButton: () => null,
-              tabBarStyle: { display: 'none' },
-            }}
+            options={({ route }) => ({
+              title: 'Report Incident',
+              tabBarStyle: {
+                display: getTabBarVisibility(route) ? 'flex' : 'none',
+              },
+            })}
           />
           <Tab.Screen
             name="Remarks"

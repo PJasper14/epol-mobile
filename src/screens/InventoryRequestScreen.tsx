@@ -53,23 +53,72 @@ const InventoryRequestScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [allInventoryItems, setAllInventoryItems] = useState<InventoryItem[]>([]);
   const [requestItems, setRequestItems] = useState<RequestItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<string>('');
   const [quantity, setQuantity] = useState('1');
   const [reason, setReason] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock'>('all');
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 5;
+ 
   useEffect(() => {
     loadInventoryItems();
   }, []);
 
+  // Handle search and filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+    loadInventoryItems();
+  }, [searchQuery, selectedFilter]);
+
   const loadInventoryItems = async () => {
+    await loadInventoryItemsForPage(currentPage);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setCurrentPage(1);
+    await loadInventoryItems();
+  };
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  const handleFilterChange = (filter: 'all' | 'in_stock' | 'low_stock' | 'out_of_stock') => {
+    setSelectedFilter(filter);
+  };
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      loadInventoryItemsForPage(nextPage);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      const prevPage = currentPage - 1;
+      setCurrentPage(prevPage);
+      loadInventoryItemsForPage(prevPage);
+    }
+  };
+
+  const loadInventoryItemsForPage = async (page: number) => {
     try {
       setLoading(true);
       
       // For demo purposes, using mock data
       // In production, this would be an API call
-      const mockItems: InventoryItem[] = [
+      const allMockItems: InventoryItem[] = [
         {
           id: '1',
           name: 'Sako',
@@ -163,7 +212,53 @@ const InventoryRequestScreen = () => {
         }
       ];
 
-      setInventoryItems(mockItems);
+      // Filter items based on selected filter
+      let filteredItems = allMockItems;
+      
+      if (selectedFilter !== 'all') {
+        filteredItems = allMockItems.filter(item => {
+          // Calculate status directly here instead of using getStockStatus function
+          let status;
+          if (item.quantity === 0) {
+            status = 'Out of Stock';
+          } else if (item.quantity < item.threshold) {
+            status = 'Low Stock';
+          } else {
+            status = 'In Stock';
+          }
+          
+          switch (selectedFilter) {
+            case 'in_stock':
+              return status === 'In Stock';
+            case 'low_stock':
+              return status === 'Low Stock';
+            case 'out_of_stock':
+              return status === 'Out of Stock';
+            default:
+              return true;
+          }
+        });
+      }
+      
+      // Search filter
+      if (searchQuery.trim()) {
+        filteredItems = filteredItems.filter(item =>
+          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.id.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+      
+      // Calculate pagination
+      const totalPagesCount = Math.ceil(filteredItems.length / itemsPerPage);
+      setTotalPages(totalPagesCount);
+      
+      // Get items for specified page
+      const startIndex = (page - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const pageItems = filteredItems.slice(startIndex, endIndex);
+      
+      setInventoryItems(pageItems);
+      setAllInventoryItems(allMockItems);
     } catch (error) {
       console.error('Error loading inventory items:', error);
       Alert.alert('Error', 'Failed to load inventory items');
@@ -171,11 +266,6 @@ const InventoryRequestScreen = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadInventoryItems();
   };
 
   const getStockStatus = (item: InventoryItem) => {
@@ -202,7 +292,7 @@ const InventoryRequestScreen = () => {
       return;
     }
 
-    const item = inventoryItems.find(i => i.id === selectedItem);
+    const item = allInventoryItems.find(i => i.id === selectedItem);
     if (!item) return;
 
     // Check if item already exists in request
@@ -226,14 +316,33 @@ const InventoryRequestScreen = () => {
       setRequestItems([...requestItems, newItem]);
     }
 
-    // Reset form
-    setSelectedItem('');
-    setQuantity('1');
-    setShowAddModal(false);
+         // Reset form
+     setSelectedItem('');
+     setQuantity('1');
+     setShowItemDropdown(false);
+     setShowAddModal(false);
+     setSearchQuery('');
   };
 
   const removeItemFromRequest = (index: number) => {
-    setRequestItems(requestItems.filter((_, i) => i !== index));
+    const item = requestItems[index];
+    Alert.alert(
+      'Remove Item',
+      `Are you sure you want to remove "${item.itemName}" from the request list?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setRequestItems(requestItems.filter((_, i) => i !== index));
+          },
+        },
+      ]
+    );
   };
 
   const submitRequest = async () => {
@@ -298,7 +407,102 @@ const InventoryRequestScreen = () => {
   };
 
   const getSuggestedItems = () => {
-    return inventoryItems.filter(item => 
+    // Always get all items for suggested items, not filtered ones
+    const allMockItems: InventoryItem[] = [
+      {
+        id: '1',
+        name: 'Sako',
+        quantity: 2000,
+        threshold: 500,
+        unit: 'Bundles'
+      },
+      {
+        id: '2',
+        name: 'Dust Pan',
+        quantity: 1200,
+        threshold: 300,
+        unit: 'Pcs'
+      },
+      {
+        id: '3',
+        name: 'Walis Tingting (Kaong)',
+        quantity: 2400,
+        threshold: 500,
+        unit: 'Pcs'
+      },
+      {
+        id: '4',
+        name: 'Knitted Gloves',
+        quantity: 4000,
+        threshold: 1000,
+        unit: 'Pairs'
+      },
+      {
+        id: '5',
+        name: 'Rubber Gloves',
+        quantity: 400,
+        threshold: 100,
+        unit: 'Pairs'
+      },
+      {
+        id: '6',
+        name: 'Raincoat',
+        quantity: 500,
+        threshold: 100,
+        unit: 'Pcs'
+      },
+      {
+        id: '7',
+        name: 'Sickle (Karit) RS Brand',
+        quantity: 0,
+        threshold: 50,
+        unit: 'Pcs'
+      },
+      {
+        id: '8',
+        name: 'Panabas (Itak) RS Brand',
+        quantity: 0,
+        threshold: 50,
+        unit: 'Pcs'
+      },
+      {
+        id: '9',
+        name: 'Hasaan (WhetStone)',
+        quantity: 14,
+        threshold: 20,
+        unit: 'Pcs'
+      },
+      {
+        id: '10',
+        name: 'Boots',
+        quantity: 500,
+        threshold: 100,
+        unit: 'Pairs'
+      },
+      {
+        id: '11',
+        name: 'Kalaykay',
+        quantity: 20,
+        threshold: 30,
+        unit: 'Pcs'
+      },
+      {
+        id: '12',
+        name: 'Palang Lapad No.8',
+        quantity: 125,
+        threshold: 50,
+        unit: 'Pcs'
+      },
+      {
+        id: '13',
+        name: 'Asarol',
+        quantity: 125,
+        threshold: 50,
+        unit: 'Pcs'
+      }
+    ];
+    
+    return allMockItems.filter(item => 
       item.quantity === 0 || item.quantity < item.threshold
     );
   };
@@ -321,6 +525,178 @@ const InventoryRequestScreen = () => {
         }
       >
 
+
+        {/* Team Leader Inventory View */}
+        {user?.role === 'team_leader' && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <View style={styles.sectionHeader}>
+                <MaterialIcons name="inventory" size={20} color={COLORS.info} />
+                <Title style={styles.sectionTitle}>Current Inventory Status</Title>
+              </View>
+              <Text style={styles.sectionSubtitle}>View all inventory items and stock levels</Text>
+              
+              {/* Search Bar */}
+              <View style={styles.searchContainer}>
+                <TextInput
+                  mode="outlined"
+                  placeholder="Search items..."
+                  value={searchQuery}
+                  onChangeText={handleSearchChange}
+                  left={<TextInput.Icon icon="magnify" />}
+                  right={searchQuery ? <TextInput.Icon icon="close" onPress={() => handleSearchChange('')} /> : undefined}
+                  style={styles.searchInput}
+                  outlineStyle={styles.inputOutline}
+                />
+              </View>
+              
+              {/* Filter Chips */}
+              <View style={styles.filterContainer}>
+                <Text style={styles.filterLabel}>Filter by status:</Text>
+                <View style={styles.filterChips}>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      selectedFilter === 'all' && styles.filterChipActive
+                    ]}
+                    onPress={() => handleFilterChange('all')}
+                  >
+                    <Text style={[
+                      styles.filterChipText,
+                      selectedFilter === 'all' && styles.filterChipTextActive
+                    ]}>
+                      All
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      selectedFilter === 'in_stock' && styles.filterChipActive
+                    ]}
+                    onPress={() => handleFilterChange('in_stock')}
+                  >
+                    <Text style={[
+                      styles.filterChipText,
+                      selectedFilter === 'in_stock' && styles.filterChipTextActive
+                    ]}>
+                      In Stock
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      selectedFilter === 'low_stock' && styles.filterChipActive
+                    ]}
+                    onPress={() => handleFilterChange('low_stock')}
+                  >
+                    <Text style={[
+                      styles.filterChipText,
+                      selectedFilter === 'low_stock' && styles.filterChipTextActive
+                    ]}>
+                      Low Stock
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      selectedFilter === 'out_of_stock' && styles.filterChipActive
+                    ]}
+                    onPress={() => handleFilterChange('out_of_stock')}
+                  >
+                    <Text style={[
+                      styles.filterChipText,
+                      selectedFilter === 'out_of_stock' && styles.filterChipTextActive
+                    ]}>
+                      Out of Stock
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.inventoryContainer}>
+                {inventoryItems.map((item) => (
+                  <View key={item.id} style={styles.inventoryItem}>
+                    <View style={styles.inventoryItemContent}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <Text style={styles.itemDetails}>
+                        {item.quantity} {item.unit} (Threshold: {item.threshold})
+                      </Text>
+                    </View>
+                    <Chip
+                      style={[
+                        styles.statusChip,
+                        { backgroundColor: getStockStatusColor(item) + '20' }
+                      ]}
+                      textStyle={{ 
+                        color: getStockStatusColor(item),
+                        fontWeight: '600',
+                        lineHeight: 18,
+                      }}
+                    >
+                      {getStockStatus(item)}
+                    </Chip>
+                  </View>
+                ))}
+                
+                {/* Pagination Controls */}
+                <View style={styles.paginationContainer}>
+                  <View style={styles.paginationInfo}>
+                    <Text style={styles.paginationText}>
+                      Page {currentPage} of {totalPages}
+                    </Text>
+                    <Text style={styles.paginationSubtext}>
+                      {inventoryItems.length} items shown
+                    </Text>
+                  </View>
+                  <View style={styles.paginationButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.paginationButton,
+                        styles.previousButton,
+                        currentPage === 1 && styles.paginationButtonDisabled
+                      ]}
+                      onPress={goToPreviousPage}
+                      disabled={currentPage === 1}
+                    >
+                      <MaterialIcons 
+                        name="chevron-left" 
+                        size={20} 
+                        color={currentPage === 1 ? COLORS.text.disabled : COLORS.primary} 
+                      />
+                      <Text style={[
+                        styles.paginationButtonText,
+                        currentPage === 1 && styles.paginationButtonTextDisabled
+                      ]}>
+                        Previous
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.paginationButton,
+                        styles.nextButton,
+                        currentPage === totalPages && styles.paginationButtonDisabled
+                      ]}
+                      onPress={goToNextPage}
+                      disabled={currentPage === totalPages}
+                    >
+                      <Text style={[
+                        styles.paginationButtonText,
+                        currentPage === totalPages && styles.paginationButtonTextDisabled
+                      ]}>
+                        Next
+                      </Text>
+                      <MaterialIcons 
+                        name="chevron-right" 
+                        size={20} 
+                        color={currentPage === totalPages ? COLORS.text.disabled : COLORS.primary} 
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Suggested Items */}
         <Card style={styles.card}>
@@ -382,7 +758,7 @@ const InventoryRequestScreen = () => {
             <View style={styles.addItemHeader}>
               <View style={styles.sectionHeader}>
                 <MaterialIcons name="add-shopping-cart" size={20} color={COLORS.primary} />
-              <Title style={styles.sectionTitle}>Add Items</Title>
+              <Title style={styles.sectionTitle}>Request Items</Title>
               </View>
               <Button
                 mode="contained"
@@ -398,17 +774,22 @@ const InventoryRequestScreen = () => {
         </Card>
 
         {/* Request Items List */}
-        {requestItems.length > 0 && (
-          <Card style={styles.card}>
-            <Card.Content>
-              <View style={styles.sectionHeader}>
-                <MaterialIcons name="list-alt" size={20} color={COLORS.info} />
-              <Title style={styles.sectionTitle}>Request Items</Title>
-                <Chip style={styles.itemCountChip} textStyle={{ color: 'white' }}>
-                  {requestItems.length} item{requestItems.length !== 1 ? 's' : ''}
-                </Chip>
+        <Card style={styles.card}>
+          <Card.Content>
+            <View style={styles.sectionHeader}>
+              <MaterialIcons name="list-alt" size={20} color={COLORS.info} />
+            <Title style={styles.sectionTitle}>Request List</Title>
+              <Chip style={styles.itemCountChip} textStyle={{ color: 'white' }}>
+                {requestItems.length} item{requestItems.length !== 1 ? 's' : ''}
+              </Chip>
+            </View>
+            {requestItems.length === 0 ? (
+              <View style={styles.emptyRequestList}>
+                <MaterialIcons name="shopping-cart" size={48} color={COLORS.text.disabled} />
+                <Text style={styles.emptyRequestListText}>No items in request list</Text>
               </View>
-              {requestItems.map((item, index) => (
+            ) : (
+              requestItems.map((item, index) => (
                 <View key={index} style={styles.requestItem}>
                   <View style={styles.requestItemContent}>
                     <Text style={styles.itemName}>{item.itemName}</Text>
@@ -416,18 +797,18 @@ const InventoryRequestScreen = () => {
                       {item.quantity} {item.unit}
                     </Text>
                   </View>
-                  <IconButton
-                    icon="delete"
-                    size={20}
+                  <TouchableOpacity
                     onPress={() => removeItemFromRequest(index)}
                     style={styles.deleteButton}
-                    iconColor={COLORS.error}
-                  />
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="delete-outline" size={22} color={COLORS.error} />
+                  </TouchableOpacity>
                 </View>
-              ))}
-            </Card.Content>
-          </Card>
-        )}
+              ))
+            )}
+          </Card.Content>
+        </Card>
 
         {/* Reason */}
         <Card style={styles.card}>
@@ -472,12 +853,16 @@ const InventoryRequestScreen = () => {
                 <MaterialIcons name="add-shopping-cart" size={24} color={COLORS.primary} />
                 <Title style={styles.modalTitle}>Add Item to Request</Title>
               </View>
-              <IconButton
-                icon="close"
-                size={24}
-                onPress={() => setShowAddModal(false)}
-                iconColor={COLORS.text.secondary}
-              />
+                             <IconButton
+                 icon="close"
+                 size={24}
+                 onPress={() => {
+                   setShowAddModal(false);
+                   setShowItemDropdown(false);
+                   setSearchQuery('');
+                 }}
+                 iconColor={COLORS.text.secondary}
+               />
             </View>
             
             <View style={styles.modalContent}>
@@ -486,12 +871,12 @@ const InventoryRequestScreen = () => {
                 <TouchableOpacity
                   style={styles.itemSelector}
                   onPress={() => {
-                    // Show item picker
+                    setShowItemDropdown(!showItemDropdown);
                   }}
                 >
                   {selectedItem ? (
                     <Text style={styles.selectedItemText}>
-                      {inventoryItems.find(i => i.id === selectedItem)?.name}
+                      {allInventoryItems.find(i => i.id === selectedItem)?.name}
                     </Text>
                   ) : (
                     <Text style={styles.placeholderText}>Choose an item...</Text>
@@ -499,28 +884,52 @@ const InventoryRequestScreen = () => {
                   <MaterialIcons name="arrow-drop-down" size={24} color={COLORS.text.secondary} />
                 </TouchableOpacity>
                 
+                {showItemDropdown && (
+                  <>
+                    <View style={styles.searchContainer}>
+                      <TextInput
+                        mode="outlined"
+                        placeholder="Search items..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        left={<TextInput.Icon icon="magnify" />}
+                        style={styles.searchInput}
+                        outlineStyle={styles.inputOutline}
+                      />
+                    </View>
                     <ScrollView style={styles.itemDropdown}>
-                      {inventoryItems.map((item) => (
-                        <TouchableOpacity
-                          key={item.id}
-                          style={styles.dropdownItem}
-                          onPress={() => setSelectedItem(item.id)}
-                        >
-                      <View style={styles.dropdownItemContent}>
+                      {allInventoryItems
+                        .filter(item => 
+                          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          item.unit.toLowerCase().includes(searchQuery.toLowerCase())
+                        )
+                        .map((item) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={styles.dropdownItem}
+                                                 onPress={() => {
+                           setSelectedItem(item.id);
+                           setShowItemDropdown(false); // Close dropdown after selection
+                           setSearchQuery(''); // Reset search query
+                         }}
+                      >
+                        <View style={styles.dropdownItemContent}>
                           <Text style={styles.dropdownItemText}>{item.name}</Text>
                           <Text style={styles.dropdownItemDetails}>
                             {item.quantity} {item.unit} - {getStockStatus(item)}
                           </Text>
-                      </View>
-                      <MaterialIcons 
-                        name={getStockStatusIcon(item)} 
-                        size={16} 
-                        color={getStockStatusColor(item)} 
-                      />
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
+                        </View>
+                        <MaterialIcons 
+                          name={getStockStatusIcon(item)} 
+                          size={16} 
+                          color={getStockStatusColor(item)} 
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  </>
+                )}
+              </View>
               
               <View style={styles.modalInputContainer}>
                 <Text style={styles.modalInputLabel}>Quantity</Text>
@@ -531,20 +940,24 @@ const InventoryRequestScreen = () => {
                 keyboardType="numeric"
                 style={styles.modalInput}
                   outlineStyle={styles.inputOutline}
-                  right={<TextInput.Affix text={inventoryItems.find(i => i.id === selectedItem)?.unit || ''} />}
+                  right={<TextInput.Affix text={allInventoryItems.find(i => i.id === selectedItem)?.unit || ''} />}
               />
               </View>
             </View>
             
             <View style={styles.modalFooter}>
-              <Button
-                mode="outlined"
-                onPress={() => setShowAddModal(false)}
-                style={styles.modalButton}
-                contentStyle={styles.modalButtonContent}
-              >
-                Cancel
-              </Button>
+                             <Button
+                 mode="outlined"
+                 onPress={() => {
+                   setShowAddModal(false);
+                   setShowItemDropdown(false);
+                   setSearchQuery('');
+                 }}
+                 style={styles.modalButton}
+                 contentStyle={styles.modalButtonContent}
+               >
+                 Cancel
+               </Button>
               <Button
                 mode="contained"
                 onPress={addItemToRequest}
@@ -594,6 +1007,125 @@ const styles = StyleSheet.create({
     color: COLORS.text.secondary,
     marginBottom: SPACING.m,
     fontStyle: 'italic',
+  },
+  inventoryContainer: {
+    gap: SPACING.s,
+  },
+  inventoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.m,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: 8,
+    backgroundColor: 'white',
+  },
+  inventoryItemContent: {
+    flex: 1,
+  },
+  searchContainer: {
+    marginBottom: SPACING.m,
+  },
+  searchInput: {
+    backgroundColor: 'white',
+  },
+  filterContainer: {
+    marginBottom: SPACING.m,
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: SPACING.s,
+  },
+  filterChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.s,
+  },
+  filterChip: {
+    paddingVertical: SPACING.s,
+    paddingHorizontal: SPACING.m,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    backgroundColor: 'white',
+    alignItems: 'center',
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.text.secondary,
+  },
+  filterChipTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  paginationContainer: {
+    marginTop: SPACING.m,
+    paddingTop: SPACING.m,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: SPACING.m,
+  },
+  paginationInfo: {
+    alignItems: 'center',
+    marginBottom: SPACING.m,
+  },
+  paginationText: {
+    fontSize: 16,
+    color: COLORS.text.primary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  paginationSubtext: {
+    fontSize: 12,
+    color: COLORS.text.secondary,
+  },
+  paginationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: SPACING.m,
+  },
+  paginationButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.l,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    ...SHADOWS.small,
+  },
+  previousButton: {
+    flexDirection: 'row',
+  },
+  nextButton: {
+    flexDirection: 'row-reverse',
+  },
+  paginationButtonDisabled: {
+    backgroundColor: '#f5f5f5',
+    borderColor: COLORS.divider,
+    ...SHADOWS.small,
+  },
+  paginationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+    marginHorizontal: SPACING.s,
+  },
+  paginationButtonTextDisabled: {
+    color: COLORS.text.disabled,
   },
   suggestedContainer: {
     gap: SPACING.s,
@@ -663,7 +1195,32 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   deleteButton: {
-    margin: 0,
+    padding: SPACING.s,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    marginLeft: SPACING.s,
+  },
+  emptyRequestList: {
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  emptyRequestListText: {
+    marginTop: SPACING.m,
+    fontSize: 16,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  emptyRequestListSubtext: {
+    marginTop: SPACING.s,
+    fontSize: 14,
+    color: COLORS.text.disabled,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   reasonInput: {
     marginTop: SPACING.s,

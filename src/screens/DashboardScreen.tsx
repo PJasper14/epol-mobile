@@ -97,9 +97,7 @@ const DashboardScreen = () => {
     navigation.navigate('Attendance', { screen: 'Attendance' });
   };
 
-  const navigateToReportIncident = () => {
-    navigation.navigate('ReportIncident', { screen: 'ReportIncident' });
-  };
+
 
   const navigateToRemarks = () => {
     navigation.navigate('Remarks', { screen: 'Remarks' });
@@ -214,11 +212,6 @@ const DashboardScreen = () => {
                 label="Attendance" 
                 onPress={navigateToAttendance} 
                 disabled={!!attendanceToday?.clockOut}
-              />
-              <QuickAction 
-                icon="shield-check" 
-                label="Report Incident" 
-                onPress={navigateToReportIncident} 
               />
               {user?.role === 'team_leader' && (
                 <QuickAction 
