@@ -20,14 +20,16 @@ import {
   Surface,
   List,
   IconButton,
+  Portal,
 } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { COLORS, SPACING, SHADOWS } from '../utils/theme';
+import { COLORS, SPACING, SHADOWS, FONT_SIZES, BORDER_RADIUS } from '../utils/theme';
 import { useAuth } from '../context/AuthContext';
+import { apiService } from '../services/ApiService';
 
 interface InventoryItem {
   id: string;
@@ -60,13 +62,16 @@ const InventoryRequestScreen = () => {
   const [reason, setReason] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showItemDropdown, setShowItemDropdown] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<number | null>(null);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock'>('all');
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
  
   useEffect(() => {
     loadInventoryItems();
@@ -116,149 +121,39 @@ const InventoryRequestScreen = () => {
     try {
       setLoading(true);
       
-      // For demo purposes, using mock data
-      // In production, this would be an API call
-      const allMockItems: InventoryItem[] = [
-        {
-          id: '1',
-          name: 'Sako',
-          quantity: 2000,
-          threshold: 500,
-          unit: 'Bundles'
-        },
-        {
-          id: '2',
-          name: 'Dust Pan',
-          quantity: 1200,
-          threshold: 300,
-          unit: 'Pcs'
-        },
-        {
-          id: '3',
-          name: 'Walis Tingting (Kaong)',
-          quantity: 2400,
-          threshold: 500,
-          unit: 'Pcs'
-        },
-        {
-          id: '4',
-          name: 'Knitted Gloves',
-          quantity: 4000,
-          threshold: 1000,
-          unit: 'Pairs'
-        },
-        {
-          id: '5',
-          name: 'Rubber Gloves',
-          quantity: 400,
-          threshold: 100,
-          unit: 'Pairs'
-        },
-        {
-          id: '6',
-          name: 'Raincoat',
-          quantity: 500,
-          threshold: 100,
-          unit: 'Pcs'
-        },
-        {
-          id: '7',
-          name: 'Sickle (Karit) RS Brand',
-          quantity: 0,
-          threshold: 50,
-          unit: 'Pcs'
-        },
-        {
-          id: '8',
-          name: 'Panabas (Itak) RS Brand',
-          quantity: 0,
-          threshold: 50,
-          unit: 'Pcs'
-        },
-        {
-          id: '9',
-          name: 'Hasaan (WhetStone)',
-          quantity: 14,
-          threshold: 20,
-          unit: 'Pcs'
-        },
-        {
-          id: '10',
-          name: 'Boots',
-          quantity: 500,
-          threshold: 100,
-          unit: 'Pairs'
-        },
-        {
-          id: '11',
-          name: 'Kalaykay',
-          quantity: 20,
-          threshold: 30,
-          unit: 'Pcs'
-        },
-        {
-          id: '12',
-          name: 'Palang Lapad No.8',
-          quantity: 125,
-          threshold: 50,
-          unit: 'Pcs'
-        },
-        {
-          id: '13',
-          name: 'Asarol',
-          quantity: 125,
-          threshold: 50,
-          unit: 'Pcs'
-        }
-      ];
+      // Get stock status filter
+      let stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock' | undefined;
+      if (selectedFilter === 'low_stock') stockStatus = 'low_stock';
+      else if (selectedFilter === 'out_of_stock') stockStatus = 'out_of_stock';
+      else if (selectedFilter === 'in_stock') stockStatus = 'in_stock';
+      
+      // Call API to get inventory items
+      const response = await apiService.getInventoryItems({
+        search: searchQuery,
+        stock_status: stockStatus,
+        per_page: itemsPerPage,
+        page: page
+      });
+      
+      const apiItems = response.data || [];
+      const totalPages = (response as any).last_page || 1;
+      
+      // Transform API data to match our interface
+      const transformedItems: InventoryItem[] = apiItems.map((item: any) => ({
+        id: item.id.toString(),
+        name: item.name,
+        quantity: item.quantity,
+        threshold: item.threshold,
+        unit: item.unit
+      }));
+      
+      setInventoryItems(transformedItems);
+      setTotalPages(totalPages);
+      
+      // Set all items for dropdown (use API data if available, otherwise fallback to mock)
+      setAllInventoryItems(transformedItems);
+      
 
-      // Filter items based on selected filter
-      let filteredItems = allMockItems;
-      
-      if (selectedFilter !== 'all') {
-        filteredItems = allMockItems.filter(item => {
-          // Calculate status directly here instead of using getStockStatus function
-          let status;
-          if (item.quantity === 0) {
-            status = 'Out of Stock';
-          } else if (item.quantity < item.threshold) {
-            status = 'Low Stock';
-          } else {
-            status = 'In Stock';
-          }
-          
-          switch (selectedFilter) {
-            case 'in_stock':
-              return status === 'In Stock';
-            case 'low_stock':
-              return status === 'Low Stock';
-            case 'out_of_stock':
-              return status === 'Out of Stock';
-            default:
-              return true;
-          }
-        });
-      }
-      
-      // Search filter
-      if (searchQuery.trim()) {
-        filteredItems = filteredItems.filter(item =>
-          item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.id.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-      }
-      
-      // Calculate pagination
-      const totalPagesCount = Math.ceil(filteredItems.length / itemsPerPage);
-      setTotalPages(totalPagesCount);
-      
-      // Get items for specified page
-      const startIndex = (page - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      const pageItems = filteredItems.slice(startIndex, endIndex);
-      
-      setInventoryItems(pageItems);
-      setAllInventoryItems(allMockItems);
     } catch (error) {
       console.error('Error loading inventory items:', error);
       Alert.alert('Error', 'Failed to load inventory items');
@@ -325,24 +220,21 @@ const InventoryRequestScreen = () => {
   };
 
   const removeItemFromRequest = (index: number) => {
-    const item = requestItems[index];
-    Alert.alert(
-      'Remove Item',
-      `Are you sure you want to remove "${item.itemName}" from the request list?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            setRequestItems(requestItems.filter((_, i) => i !== index));
-          },
-        },
-      ]
-    );
+    setItemToDelete(index);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteItem = () => {
+    if (itemToDelete !== null) {
+      setRequestItems(requestItems.filter((_, i) => i !== itemToDelete));
+      setShowDeleteModal(false);
+      setItemToDelete(null);
+    }
+  };
+
+  const handleScroll = (event: any) => {
+    const scrollY = event.nativeEvent.contentOffset.y;
+    // Handle scroll events if needed
   };
 
   const submitRequest = async () => {
@@ -356,8 +248,13 @@ const InventoryRequestScreen = () => {
       return;
     }
 
+    setShowSubmitModal(true);
+  };
+
+  const confirmSubmitRequest = async () => {
     try {
       setSubmitting(true);
+      setShowSubmitModal(false);
 
       const requestData = {
         items: requestItems.map(item => ({
@@ -368,19 +265,8 @@ const InventoryRequestScreen = () => {
         request_date: new Date().toISOString().split('T')[0]
       };
 
-      // For demo purposes, simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Save to local storage for demo
-      const existingRequests = await AsyncStorage.getItem('inventory_requests') || '[]';
-      const requests = JSON.parse(existingRequests);
-      requests.push({
-        id: Date.now().toString(),
-        ...requestData,
-        status: 'pending',
-        created_at: new Date().toISOString()
-      });
-      await AsyncStorage.setItem('inventory_requests', JSON.stringify(requests));
+      // Submit to API
+      const response = await apiService.submitInventoryRequest(requestData);
 
       Alert.alert(
         'Success',
@@ -396,6 +282,7 @@ const InventoryRequestScreen = () => {
             }
           }
         ]
+        
       );
 
     } catch (error) {
@@ -407,8 +294,8 @@ const InventoryRequestScreen = () => {
   };
 
   const getSuggestedItems = () => {
-    // Always get all items for suggested items, not filtered ones
-    const allMockItems: InventoryItem[] = [
+    // Use API data if available, otherwise fallback to mock data
+    const itemsToUse = allInventoryItems.length > 0 ? allInventoryItems : [
       {
         id: '1',
         name: 'Sako',
@@ -502,7 +389,7 @@ const InventoryRequestScreen = () => {
       }
     ];
     
-    return allMockItems.filter(item => 
+    return itemsToUse.filter(item => 
       item.quantity === 0 || item.quantity < item.threshold
     );
   };
@@ -518,11 +405,16 @@ const InventoryRequestScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
         }
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
       >
 
 
@@ -972,6 +864,86 @@ const InventoryRequestScreen = () => {
           </Surface>
         </View>
       )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <Portal>
+          <Surface style={styles.dialogOverlay}>
+            <Card style={styles.confirmationDialog}>
+              <Card.Content>
+                <Title style={styles.dialogTitle}>Remove Item</Title>
+                <Text style={styles.dialogMessage}>
+                  Are you sure you want to remove "{itemToDelete !== null ? requestItems[itemToDelete]?.itemName : ''}" from the request list?
+                </Text>
+                <View style={styles.dialogButtons}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => {
+                      setShowDeleteModal(false);
+                      setItemToDelete(null);
+                    }}
+                    style={styles.dialogButton}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={confirmDeleteItem}
+                    style={[styles.dialogButton, styles.dialogButtonDanger]}
+                    buttonColor={COLORS.error}
+                  >
+                    Remove
+                  </Button>
+                </View>
+              </Card.Content>
+            </Card>
+          </Surface>
+        </Portal>
+      )}
+
+      {/* Submit Confirmation Modal */}
+      {showSubmitModal && (
+        <Portal>
+          <Surface style={styles.dialogOverlay}>
+            <Card style={styles.confirmationDialog}>
+              <Card.Content>
+                <Title style={styles.dialogTitle}>Submit Request</Title>
+                <Text style={styles.dialogMessage}>
+                  Are you sure you want to submit this inventory request? This action cannot be undone.
+                </Text>
+                <View style={styles.dialogSummary}>
+                  <Text style={styles.dialogSummaryTitle}>Request Summary:</Text>
+                  <Text style={styles.dialogSummaryText}>
+                    • {requestItems.length} item{requestItems.length !== 1 ? 's' : ''} requested
+                  </Text>
+                  <Text style={styles.dialogSummaryText}>
+                    • Reason: {reason.length > 50 ? reason.substring(0, 50) + '...' : reason}
+                  </Text>
+                </View>
+                <View style={styles.dialogButtons}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setShowSubmitModal(false)}
+                    style={styles.dialogButton}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={confirmSubmitRequest}
+                    style={[styles.dialogButton, styles.dialogButtonSuccess]}
+                    buttonColor={COLORS.primary}
+                    loading={submitting}
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Request'}
+                  </Button>
+                </View>
+              </Card.Content>
+            </Card>
+          </Surface>
+        </Portal>
+      )}
     </SafeAreaView>
   );
 };
@@ -984,29 +956,38 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContent: {
+    paddingTop: SPACING.m,
+  },
 
   card: {
     margin: SPACING.m,
     marginTop: SPACING.s,
-    borderRadius: 12,
+    borderRadius: 16,
     ...SHADOWS.medium,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.s,
+    marginBottom: SPACING.m,
+    paddingBottom: SPACING.s,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     marginLeft: SPACING.s,
     color: COLORS.text.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   sectionSubtitle: {
     fontSize: 14,
     color: COLORS.text.secondary,
-    marginBottom: SPACING.m,
-    fontStyle: 'italic',
+    marginBottom: SPACING.l,
+    lineHeight: 20,
   },
   inventoryContainer: {
     gap: SPACING.s,
@@ -1015,11 +996,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.m,
+    padding: SPACING.l,
     borderWidth: 1,
-    borderColor: COLORS.divider,
-    borderRadius: 8,
-    backgroundColor: 'white',
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    ...SHADOWS.small,
+    marginBottom: SPACING.s,
   },
   inventoryItemContent: {
     flex: 1,
@@ -1046,25 +1029,27 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     paddingVertical: SPACING.s,
-    paddingHorizontal: SPACING.m,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
-    backgroundColor: 'white',
+    paddingHorizontal: SPACING.l,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#E5E5E5',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
+    ...SHADOWS.small,
   },
   filterChipActive: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
+    ...SHADOWS.medium,
   },
   filterChipText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     color: COLORS.text.secondary,
   },
   filterChipTextActive: {
-    color: 'white',
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   paginationContainer: {
     marginTop: SPACING.m,
@@ -1134,11 +1119,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.m,
+    padding: SPACING.l,
     borderWidth: 1,
-    borderColor: COLORS.divider,
-    borderRadius: 8,
-    backgroundColor: 'white',
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    ...SHADOWS.small,
+    marginBottom: SPACING.s,
   },
   suggestedItemContent: {
     flex: 1,
@@ -1182,9 +1169,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: SPACING.m,
+    paddingVertical: SPACING.l,
+    paddingHorizontal: SPACING.m,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: '#F0F0F0',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 8,
+    marginBottom: SPACING.s,
   },
   requestItemContent: {
     flex: 1,
@@ -1231,11 +1222,13 @@ const styles = StyleSheet.create({
   submitButton: {
     margin: SPACING.m,
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    elevation: 4,
+    borderRadius: 16,
+    ...SHADOWS.large,
+    elevation: 6,
   },
   submitButtonContent: {
-    height: 50,
+    height: 56,
+    paddingHorizontal: SPACING.xl,
   },
   emptyState: {
     alignItems: 'center',
@@ -1265,23 +1258,30 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    padding: SPACING.m,
+    paddingTop: SPACING.xxl,
+    paddingBottom: SPACING.xl,
+    paddingHorizontal: SPACING.m,
   },
   modal: {
     width: '100%',
     maxWidth: 400,
-    borderRadius: 16,
+    maxHeight: '85%',
+    borderRadius: 20,
     ...SHADOWS.large,
+    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.m,
+    padding: SPACING.l,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: '#F0F0F0',
+    backgroundColor: '#FAFAFA',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   modalTitleContainer: {
     flexDirection: 'row',
@@ -1292,7 +1292,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   modalContent: {
-    padding: SPACING.m,
+    padding: SPACING.l,
+    backgroundColor: '#FFFFFF',
   },
   modalInputContainer: {
     marginBottom: SPACING.m,
@@ -1326,26 +1327,32 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     padding: SPACING.m,
     borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
+    borderTopColor: '#F0F0F0',
+    backgroundColor: '#FAFAFA',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
     gap: SPACING.s,
   },
   modalButton: {
-    minWidth: 100,
+    flex: 1,
     borderRadius: 8,
+    ...SHADOWS.small,
   },
   modalButtonContent: {
     height: 40,
+    paddingHorizontal: SPACING.m,
   },
   itemDropdown: {
-    maxHeight: 200,
+    maxHeight: 100,
     borderWidth: 1,
-    borderColor: COLORS.divider,
-    borderRadius: 8,
-    marginTop: 4,
-    backgroundColor: 'white',
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    ...SHADOWS.small,
   },
   dropdownItem: {
     flexDirection: 'row',
@@ -1353,7 +1360,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.m,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: '#F0F0F0',
   },
   dropdownItemContent: {
     flex: 1,
@@ -1367,6 +1374,67 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text.secondary,
     marginTop: 2,
+  },
+  // Dialog styles
+  dialogOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.l,
+  },
+  confirmationDialog: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: BORDER_RADIUS.l,
+    ...SHADOWS.large,
+  },
+  dialogTitle: {
+    fontSize: FONT_SIZES.h2,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginBottom: SPACING.s,
+  },
+  dialogMessage: {
+    fontSize: FONT_SIZES.body,
+    color: COLORS.text.secondary,
+    marginBottom: SPACING.l,
+    lineHeight: 22,
+  },
+  dialogButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: SPACING.s,
+  },
+  dialogButton: {
+    minWidth: 80,
+  },
+  dialogButtonDanger: {
+    // Additional danger button styles if needed
+  },
+  dialogSummary: {
+    backgroundColor: '#F8F9FA',
+    padding: SPACING.m,
+    borderRadius: BORDER_RADIUS.s,
+    marginVertical: SPACING.m,
+  },
+  dialogSummaryTitle: {
+    fontSize: FONT_SIZES.body,
+    fontWeight: '600',
+    color: COLORS.text.primary,
+    marginBottom: SPACING.s,
+  },
+  dialogSummaryText: {
+    fontSize: FONT_SIZES.caption,
+    color: COLORS.text.secondary,
+    marginBottom: SPACING.xs,
+  },
+  dialogButtonSuccess: {
+    // Additional success button styles if needed
   },
 });
 

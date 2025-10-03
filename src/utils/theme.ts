@@ -34,6 +34,7 @@ export const FONT_SIZES = {
 };
 
 export const SPACING = {
+  xxs: 2,
   xs: 4,
   s: 8,
   m: 16,

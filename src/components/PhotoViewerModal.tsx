@@ -25,6 +25,7 @@ interface PhotoViewerModalProps {
   currentIndex: number;
   onClose: () => void;
   onIndexChange?: (index: number) => void;
+  watermarkText?: string;
 }
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -35,6 +36,7 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
   currentIndex,
   onClose,
   onIndexChange,
+  watermarkText,
 }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(currentIndex);
   const [scale, setScale] = useState(1);
@@ -187,20 +189,27 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({
                         activeOpacity={1}
                         style={styles.imageTouchable}
                       >
-                        <Image
-                          source={{ uri }}
-                          style={[
-                            styles.image,
-                            {
-                              transform: [
-                                { scale: scale },
-                                { translateX: translateX },
-                                { translateY: translateY },
-                              ],
-                            },
-                          ]}
-                          resizeMode="contain"
-                        />
+                        <View style={styles.imageContainer}>
+                          <Image
+                            source={{ uri }}
+                            style={[
+                              styles.image,
+                              {
+                                transform: [
+                                  { scale: scale },
+                                  { translateX: translateX },
+                                  { translateY: translateY },
+                                ],
+                              },
+                            ]}
+                            resizeMode="contain"
+                          />
+                          {watermarkText && (
+                            <View style={styles.watermarkOverlay}>
+                              <Text style={styles.watermarkText}>{watermarkText}</Text>
+                            </View>
+                          )}
+                        </View>
                       </TouchableOpacity>
                     </View>
                   </PinchGestureHandler>
@@ -366,6 +375,23 @@ const styles = StyleSheet.create({
   thumbnailImage: {
     width: '100%',
     height: '100%',
+  },
+  watermarkOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: SPACING.s,
+    borderBottomLeftRadius: BORDER_RADIUS.s,
+    borderBottomRightRadius: BORDER_RADIUS.s,
+  },
+  watermarkText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.caption,
+    fontWeight: 'bold',
+    textAlign: 'left',
+    lineHeight: 16,
   },
 });
 

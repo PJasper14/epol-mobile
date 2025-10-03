@@ -1,19 +1,48 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiService } from '../services/ApiService';
 
-export type UserRole = 'team_leader' | 'street_sweeper';
+export type UserRole = 'team_leader' | 'epol' | 'admin' | 'street_sweeper';
+
+export type WorkplaceLocation = {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius: number;
+  description?: string;
+  is_active: boolean;
+};
+
+export type EmployeeAssignment = {
+  id: number;
+  user_id: number;
+  workplace_location_id: number;
+  assigned_by: number;
+  assigned_at: string;
+  is_active: boolean;
+  workplace_location: WorkplaceLocation;
+};
 
 export type User = {
   id: string;
-  name?: string;
+  first_name: string;
+  last_name: string;
   email: string;
-  displayName?: string;
+  phone: string;
+  age: number;
+  gender: 'Male' | 'Female';
+  birthday: string;
+  home_address: string;
   role: UserRole;
+  employee_id?: string;
+  is_active: boolean;
+  current_assignment?: EmployeeAssignment;
 };
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   loading: boolean;
 }
@@ -52,45 +81,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loadUser();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<boolean> => {
     setLoading(true);
     
     try {
-      // This is where you would normally call your API
-      // For demo purposes, we'll use a timeout and mock data
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          // Mock successful authentication for different roles
-          if (email === 'leader@example.com' && password === 'password') {
-            const userData: User = {
-              id: '1',
-              email: email,
-              name: 'Team Leader',
-              role: 'team_leader',
-            };
-            
-            AsyncStorage.setItem('user', JSON.stringify(userData));
-            setUser(userData);
-            setLoading(false);
-            resolve(true);
-          } else if (email === 'sweeper@example.com' && password === 'password') {
-            const userData: User = {
-              id: '2',
-              email: email,
-              name: 'Street Sweeper',
-              role: 'street_sweeper',
-            };
-            
-            AsyncStorage.setItem('user', JSON.stringify(userData));
-            setUser(userData);
-            setLoading(false);
-            resolve(true);
-          } else {
-            setLoading(false);
-            resolve(false);
-          }
-        }, 1000);
-      });
+      const response = await apiService.login(username, password);
+      
+      // The API returns user and token directly
+      if (response.user) {
+        const userData: User = response.user;
+        await AsyncStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData);
+        setLoading(false);
+        return true;
+      } else {
+        setLoading(false);
+        return false;
+      }
     } catch (error) {
       console.error('Login error:', error);
       setLoading(false);
@@ -100,6 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
+      await apiService.logout();
       await AsyncStorage.removeItem('user');
       setUser(null);
     } catch (error) {

@@ -1,52 +1,56 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 
 // Screens
 import DashboardScreen from '../screens/DashboardScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import ReportIncidentScreen from '../screens/ReportIncidentScreen';
 import AttendanceScreen from '../screens/AttendanceScreen';
 import TeamLeaderValidationScreen from '../screens/TeamLeaderValidationScreen';
 import InventoryRequestScreen from '../screens/InventoryRequestScreen';
+import ReassignmentRequestScreen from '../screens/ReviewRequestsScreen';
 
 // Theme
 import { COLORS } from '../utils/theme';
 
 // Stack Types
 type DashboardStackParamList = {
-  Dashboard: undefined;
-  ReportIncident: undefined;
+  DashboardHome: undefined;
+  ReportIncidentForm: undefined;
   Activities: undefined;
   SearchDatabase: undefined;
   Scanner: undefined;
 };
 
 type AttendanceStackParamList = {
-  Attendance: undefined;
+  AttendanceHome: undefined;
   AttendanceHistory: undefined;
 };
 
 type ReportIncidentStackParamList = {
-  ReportIncident: undefined;
+  ReportIncidentForm: undefined;
   IncidentsList: undefined;
   IncidentDetails: { id: string };
 };
 
 type RemarksStackParamList = {
-  Remarks: undefined;
+  RemarksHome: undefined;
   ValidationHistory: undefined;
 };
 
 type InventoryRequestStackParamList = {
-  InventoryRequest: undefined;
+  InventoryRequestForm: undefined;
+};
+
+type ReassignmentRequestStackParamList = {
+  ReassignmentRequestHome: undefined;
 };
 
 type ProfileStackParamList = {
-  Profile: undefined;
+  ProfileHome: undefined;
   EditProfile: undefined;
   ChangePassword: undefined;
   LanguageSettings: undefined;
@@ -60,19 +64,20 @@ const AttendanceStack = createStackNavigator<AttendanceStackParamList>();
 const ReportIncidentStack = createStackNavigator<ReportIncidentStackParamList>();
 const RemarksStack = createStackNavigator<RemarksStackParamList>();
 const InventoryRequestStack = createStackNavigator<InventoryRequestStackParamList>();
+const ReassignmentRequestStack = createStackNavigator<ReassignmentRequestStackParamList>();
 const ProfileStack = createStackNavigator<ProfileStackParamList>();
 
 // Dashboard Stack Navigator
 const DashboardStackNavigator = () => (
   <DashboardStack.Navigator screenOptions={{ headerShown: false }}>
-    <DashboardStack.Screen name="Dashboard" component={DashboardScreen} />
+    <DashboardStack.Screen name="DashboardHome" component={DashboardScreen} />
   </DashboardStack.Navigator>
 );
 
 // Attendance Stack Navigator
 const AttendanceStackNavigator = () => (
   <AttendanceStack.Navigator screenOptions={{ headerShown: false }}>
-    <AttendanceStack.Screen name="Attendance" component={AttendanceScreen} />
+    <AttendanceStack.Screen name="AttendanceHome" component={AttendanceScreen} />
   </AttendanceStack.Navigator>
 );
 
@@ -80,7 +85,7 @@ const AttendanceStackNavigator = () => (
 const ReportIncidentStackNavigator = () => (
   <ReportIncidentStack.Navigator>
     <ReportIncidentStack.Screen
-      name="ReportIncident"
+      name="ReportIncidentForm"
       component={ReportIncidentScreen}
       options={{
         title: 'Report Incident',
@@ -95,17 +100,10 @@ const ReportIncidentStackNavigator = () => (
 
 // Remarks Stack Navigator
 const RemarksStackNavigator = () => (
-  <RemarksStack.Navigator>
+  <RemarksStack.Navigator screenOptions={{ headerShown: false }}>
     <RemarksStack.Screen
-      name="Remarks"
+      name="RemarksHome"
       component={TeamLeaderValidationScreen}
-      options={{
-        title: 'EPOL Validation',
-        headerStyle: {
-          backgroundColor: COLORS.primary,
-        },
-        headerTintColor: '#FFFFFF',
-      }}
     />
   </RemarksStack.Navigator>
 );
@@ -114,10 +112,10 @@ const RemarksStackNavigator = () => (
 const InventoryRequestStackNavigator = () => (
   <InventoryRequestStack.Navigator>
     <InventoryRequestStack.Screen
-      name="InventoryRequest"
+      name="InventoryRequestForm"
       component={InventoryRequestScreen}
       options={{
-        title: 'Request Inventory',
+        title: 'Request Inventory Items',
         headerStyle: {
           backgroundColor: COLORS.primary,
         },
@@ -130,138 +128,62 @@ const InventoryRequestStackNavigator = () => (
   </InventoryRequestStack.Navigator>
 );
 
+// Reassignment Request Stack Navigator
+const ReassignmentRequestStackNavigator = () => (
+  <ReassignmentRequestStack.Navigator>
+    <ReassignmentRequestStack.Screen
+      name="ReassignmentRequestHome"
+      component={ReassignmentRequestScreen}
+      options={{
+        title: 'Request Reassignment',
+        headerStyle: {
+          backgroundColor: COLORS.primary,
+        },
+        headerTintColor: '#FFFFFF',
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      }}
+    />
+  </ReassignmentRequestStack.Navigator>
+);
+
 // Profile Stack Navigator
 const ProfileStackNavigator = () => (
   <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-    <ProfileStack.Screen name="Profile" component={ProfileScreen} />
+    <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} />
+    <ProfileStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
   </ProfileStack.Navigator>
 );
 
-// Bottom Tab Navigator
-const Tab = createBottomTabNavigator();
-
-const getTabBarVisibility = (route: any) => {
-  const routeName = getFocusedRouteNameFromRoute(route) ?? 'Dashboard';
-  const hideOnScreens = ['ReportIncident', 'Scanner', 'IncidentDetails'];
-  
-  if (hideOnScreens.includes(routeName)) {
-    return false;
-  }
-  
-  return true;
-};
+// Main Stack Navigator (replacing bottom tabs)
+const MainStack = createStackNavigator();
 
 const MainNavigator = () => {
   const { user } = useAuth();
-  const isTeamLeader = user?.role === 'team_leader';
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap;
-
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Attendance') {
-            iconName = focused ? 'finger-print' : 'finger-print-outline';
-          } else if (route.name === 'ReportIncident') {
-            iconName = focused ? 'warning' : 'warning-outline';
-          } else if (route.name === 'Remarks') {
-            iconName = focused ? 'document-text' : 'document-text-outline';
-          } else if (route.name === 'InventoryRequest') {
-            iconName = focused ? 'cube' : 'cube-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          } else {
-            iconName = 'alert-circle';
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.text.secondary,
+    <MainStack.Navigator
+      screenOptions={{
         headerShown: false,
-      })}
+      }}
     >
-      {isTeamLeader ? (
-        <>
-          <Tab.Screen
-            name="Home"
-            component={DashboardStackNavigator}
-            options={({ route }) => ({
-              tabBarStyle: {
-                display: getTabBarVisibility(route) ? 'flex' : 'none',
-              },
-            })}
-          />
-          <Tab.Screen
-            name="Attendance"
-            component={AttendanceStackNavigator}
-            options={{
-              tabBarButton: () => null,
-              tabBarStyle: { display: 'none' },
-            }}
-          />
-          <Tab.Screen
-            name="ReportIncident"
-            component={ReportIncidentStackNavigator}
-            options={({ route }) => ({
-              title: 'Report Incident',
-              tabBarStyle: {
-                display: getTabBarVisibility(route) ? 'flex' : 'none',
-              },
-            })}
-          />
-          <Tab.Screen
-            name="Remarks"
-            component={RemarksStackNavigator}
-            options={{
-              title: 'Validation',
-              tabBarButton: () => null,
-              tabBarStyle: { display: 'none' },
-            }}
-          />
-          <Tab.Screen
-            name="InventoryRequest"
-            component={InventoryRequestStackNavigator}
-            options={{
-              title: 'Request Items',
-            }}
-          />
-          <Tab.Screen
-            name="Profile"
-            component={ProfileStackNavigator}
-            options={({ route }) => ({
-              tabBarStyle: {
-                display: getTabBarVisibility(route) ? 'flex' : 'none',
-              },
-            })}
-          />
-        </>
-      ) : (
-        <>
-          <Tab.Screen
-            name="Attendance"
-            component={AttendanceStackNavigator}
-            options={({ route }) => ({
-              tabBarStyle: {
-                display: getTabBarVisibility(route) ? 'flex' : 'none',
-              },
-            })}
-          />
-          <Tab.Screen
-            name="Profile"
-            component={ProfileStackNavigator}
-            options={({ route }) => ({
-              tabBarStyle: {
-                display: getTabBarVisibility(route) ? 'flex' : 'none',
-              },
-            })}
-          />
-        </>
+      <MainStack.Screen name="Dashboard" component={DashboardStackNavigator} />
+      <MainStack.Screen name="AttendanceTab" component={AttendanceStackNavigator} />
+      {user?.role !== 'street_sweeper' && user?.role !== 'epol' && (
+        <MainStack.Screen name="ReportIncidentTab" component={ReportIncidentStackNavigator} />
       )}
-    </Tab.Navigator>
+      {user?.role === 'team_leader' && (
+        <MainStack.Screen name="RemarksTab" component={RemarksStackNavigator} />
+      )}
+      {user?.role !== 'street_sweeper' && user?.role !== 'epol' && (
+        <MainStack.Screen name="InventoryRequestTab" component={InventoryRequestStackNavigator} />
+      )}
+      {user?.role !== 'street_sweeper' && user?.role !== 'epol' && (
+        <MainStack.Screen name="ReassignmentRequestTab" component={ReassignmentRequestStackNavigator} />
+      )}
+      <MainStack.Screen name="ProfileTab" component={ProfileStackNavigator} />
+    </MainStack.Navigator>
   );
 };
 

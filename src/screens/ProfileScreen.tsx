@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Text, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
-import { Divider, List, Button, Avatar, Switch } from 'react-native-paper';
+import { Divider, List, Button, Avatar } from 'react-native-paper';
 import { COLORS, SPACING, FONT_SIZES, SHADOWS, BORDER_RADIUS } from '../utils/theme';
 import { useAuth } from '../context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,9 +8,6 @@ import * as ImagePicker from 'expo-image-picker';
 const ProfileScreen = ({ navigation }: any) => {
   const { user, logout } = useAuth();
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [locationEnabled, setLocationEnabled] = useState(true);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
 
   const pickImage = async () => {
     try {
@@ -67,7 +64,7 @@ const ProfileScreen = ({ navigation }: any) => {
           <Avatar.Icon 
             size={40} 
             icon="arrow-left" 
-            color={COLORS.text.primary}
+            color="#FFFFFF"
             style={{ backgroundColor: 'transparent' }}
           />
         </TouchableOpacity>
@@ -83,7 +80,7 @@ const ProfileScreen = ({ navigation }: any) => {
             ) : (
               <Avatar.Text 
                 size={100} 
-                label={user?.name?.charAt(0) || 'U'} 
+                label={user?.first_name?.charAt(0) || 'U'} 
                 color={COLORS.background}
                 style={{ backgroundColor: COLORS.primary }}
               />
@@ -98,30 +95,23 @@ const ProfileScreen = ({ navigation }: any) => {
             </View>
           </TouchableOpacity>
           
-          <Text style={styles.userName}>{user?.name || 'Demo User'}</Text>
-          <Text style={styles.userRole}>{user?.role || 'Officer'}</Text>
-          <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
+          <Text style={styles.userName}>
+            {user?.first_name && user?.last_name 
+              ? `${user.first_name} ${user.last_name}` 
+              : 'Demo User'
+            }
+          </Text>
+          <Text style={styles.userRole}>
+            {user?.role === 'epol' ? 'EPOL Officer' : 
+             user?.role === 'team_leader' ? 'Team Leader' : 
+             user?.role === 'street_sweeper' ? 'Street Sweeper' : 
+             user?.role || 'Officer'}
+          </Text>
           
-          <View style={styles.badgeContainer}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>ID: PO-45872</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: COLORS.success }]}>
-              <Text style={styles.badgeText}>Active</Text>
-            </View>
-          </View>
         </View>
 
         <View style={[styles.section, SHADOWS.small]}>
           <Text style={styles.sectionTitle}>Account Settings</Text>
-          <List.Item
-            title="Edit Profile"
-            description="Update your personal information"
-            left={props => <List.Icon {...props} icon="account-edit" color={COLORS.primary} />}
-            right={props => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => navigation.navigate('EditProfile')}
-          />
-          <Divider />
           <List.Item
             title="Change Password"
             description="Update your security credentials"
@@ -129,83 +119,17 @@ const ProfileScreen = ({ navigation }: any) => {
             right={props => <List.Icon {...props} icon="chevron-right" />}
             onPress={() => navigation.navigate('ChangePassword')}
           />
-          <Divider />
-          <List.Item
-            title="Language"
-            description="English (US)"
-            left={props => <List.Icon {...props} icon="translate" color={COLORS.primary} />}
-            right={props => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => navigation.navigate('LanguageSettings')}
-          />
         </View>
 
-        <View style={[styles.section, SHADOWS.small]}>
-          <Text style={styles.sectionTitle}>App Settings</Text>
-          <List.Item
-            title="Notifications"
-            description="Receive alerts and updates"
-            left={props => <List.Icon {...props} icon="bell" color={COLORS.primary} />}
-            right={() => (
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                color={COLORS.primary}
-              />
-            )}
-          />
-          <Divider />
-          <List.Item
-            title="Location Services"
-            description="Enable location tracking"
-            left={props => <List.Icon {...props} icon="map-marker" color={COLORS.primary} />}
-            right={() => (
-              <Switch
-                value={locationEnabled}
-                onValueChange={setLocationEnabled}
-                color={COLORS.primary}
-              />
-            )}
-          />
-          <Divider />
-          <List.Item
-            title="Dark Mode"
-            description="Change app appearance"
-            left={props => <List.Icon {...props} icon="theme-light-dark" color={COLORS.primary} />}
-            right={() => (
-              <Switch
-                value={darkModeEnabled}
-                onValueChange={setDarkModeEnabled}
-                color={COLORS.primary}
-              />
-            )}
-          />
-        </View>
 
-        <View style={[styles.section, SHADOWS.small]}>
-          <Text style={styles.sectionTitle}>Support</Text>
-          <List.Item
-            title="Help & Support"
-            description="Get assistance with the app"
-            left={props => <List.Icon {...props} icon="help-circle" color={COLORS.primary} />}
-            right={props => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => navigation.navigate('Support')}
-          />
-          <Divider />
-          <List.Item
-            title="About"
-            description="App information and legal"
-            left={props => <List.Icon {...props} icon="information" color={COLORS.primary} />}
-            right={props => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => navigation.navigate('About')}
-          />
-        </View>
 
         <Button 
-          mode="outlined" 
+          mode="contained" 
           icon="logout" 
           onPress={handleLogout}
           style={styles.logoutButton}
-          color={COLORS.error}
+          buttonColor={COLORS.error}
+          textColor="#FFFFFF"
         >
           Logout
         </Button>
@@ -228,7 +152,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.m,
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.m,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.primary,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.divider,
   },
@@ -238,7 +162,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: FONT_SIZES.h2,
     fontWeight: 'bold',
-    color: COLORS.text.primary,
+    color: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
@@ -274,27 +198,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     fontWeight: '500',
   },
-  userEmail: {
-    fontSize: FONT_SIZES.caption,
-    color: COLORS.text.secondary,
-    marginTop: SPACING.xs,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    marginTop: SPACING.m,
-  },
-  badge: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.m,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.m,
-    marginHorizontal: SPACING.xs,
-  },
-  badgeText: {
-    color: COLORS.background,
-    fontSize: FONT_SIZES.small,
-    fontWeight: '500',
-  },
   section: {
     marginHorizontal: SPACING.l,
     marginTop: SPACING.l,
@@ -311,7 +214,6 @@ const styles = StyleSheet.create({
   logoutButton: {
     marginHorizontal: SPACING.l,
     marginTop: SPACING.xl,
-    borderColor: COLORS.error,
   },
 });
 

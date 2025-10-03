@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Alert, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { Text, Button, Card, Title, Paragraph, Divider, ActivityIndicator, Surface, List, Avatar, Searchbar, Banner } from 'react-native-paper';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, SPACING } from '../utils/theme';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../utils/theme';
+import LocationStatusCard from '../components/LocationStatusCard';
+
+const { width } = Dimensions.get('window');
 
 // Mock employee data for demonstration
 const EMPLOYEES = [
@@ -49,7 +53,13 @@ const AttendanceScreen = () => {
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, any>>({});
   const [showBanner, setShowBanner] = useState(true);
   const [clockOutTimer, setClockOutTimer] = useState<number>(0); // ms remaining
-  const timerInterval = useRef<NodeJS.Timeout | null>(null);
+  const timerInterval = useRef<number | null>(null);
+  
+  // Geofencing state
+  const [isWithinRadius, setIsWithinRadius] = useState<boolean | null>(null);
+  const [locationDistance, setLocationDistance] = useState<number>(0);
+  const [assignedLocation, setAssignedLocation] = useState<any>(null);
+  const [locationRefreshTrigger, setLocationRefreshTrigger] = useState(0);
 
   // Filter employees based on search query
   const filteredEmployees = EMPLOYEES.filter(employee => 
@@ -364,10 +374,49 @@ const AttendanceScreen = () => {
     }
   };
 
+  // Handle location status updates
+  const handleLocationCheck = (isWithin: boolean, distance: number, location: any) => {
+    setIsWithinRadius(isWithin);
+    setLocationDistance(distance);
+    setAssignedLocation(location);
+  };
+
+  // Refresh location check
+  const refreshLocation = () => {
+    setLocationRefreshTrigger(prev => prev + 1);
+  };
+
   const handleAuthenticate = async (type: 'clockIn' | 'clockOut', employeeId: string) => {
     setIsAuthenticating(true);
     
     try {
+      // First check location before biometric authentication
+      if (isWithinRadius === false) {
+        Alert.alert(
+          'Location Error',
+          `You are ${locationDistance}m away from the workplace. You must be within 100m to clock in/out.`,
+          [
+            { text: 'Refresh Location', onPress: refreshLocation },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        setIsAuthenticating(false);
+        return;
+      }
+
+      if (isWithinRadius === null) {
+        Alert.alert(
+          'Location Not Checked',
+          'Please check your location first before clocking in/out.',
+          [
+            { text: 'Check Location', onPress: refreshLocation },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        setIsAuthenticating(false);
+        return;
+      }
+      
       // Check if device supports biometrics
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       if (!hasHardware) {
@@ -419,25 +468,25 @@ const AttendanceScreen = () => {
   if (showEmployeeSelector) {
     return (
       <View style={styles.container}>
-        <Surface style={styles.header}>
-          <Text style={styles.headerTitle}>Biometric Attendance</Text>
-          <Text style={styles.headerSubtitle}>Select an employee to record attendance</Text>
-        </Surface>
-        
-        {showBanner && (
-          <Banner
-            visible={true}
-            icon={({size}) => <MaterialCommunityIcons name="information" size={size} color={COLORS.primary} />}
-            actions={[
-              {
-                label: 'Got it',
-                onPress: () => setShowBanner(false),
-              },
-            ]}
-            style={styles.banner}
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
           >
-            Select an employee first, then use fingerprint to clock in or out
-          </Banner>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Biometric Attendance</Text>
+          </View>
+        </View>
+
+        {/* Location Status Card - Only show when employee is selected */}
+        {selectedEmployee && (
+          <LocationStatusCard 
+            employeeId={selectedEmployee.id}
+            onLocationCheck={handleLocationCheck}
+            refreshTrigger={locationRefreshTrigger}
+          />
         )}
         
         <Searchbar
@@ -447,60 +496,57 @@ const AttendanceScreen = () => {
           style={styles.searchBar}
         />
         
-        <ScrollView style={styles.employeeList}>
+        <ScrollView style={styles.employeeList} showsVerticalScrollIndicator={false}>
           {filteredEmployees.map(employee => {
             // Calculate status for the employee
             const today = new Date().toISOString().split('T')[0];
             const employeeRecords = attendanceRecords[today]?.[employee.id] || {};
             let status = "Not clocked in";
             let statusColor = COLORS.warning;
+            let statusIcon = "alert-circle-outline";
             
             if (employeeRecords.clockIn && employeeRecords.clockOut) {
               status = "Completed";
               statusColor = COLORS.success;
+              statusIcon = "checkmark-circle";
             } else if (employeeRecords.clockIn) {
               status = "Clocked in";
               statusColor = COLORS.info;
+              statusIcon = "time";
             }
             
             return (
-              <List.Item
+              <TouchableOpacity
                 key={employee.id}
-                title={employee.name}
-                description={props => (
-                  <View>
-                    <Text style={{color: COLORS.text.secondary}}>{employee.position}</Text>
-                    <Text style={{color: statusColor, marginTop: 4}}>{status}</Text>
-                  </View>
-                )}
-                left={props => (
-                  <Avatar.Text 
-                    {...props} 
-                    size={50} 
-                    label={employee.name.substring(0, 1)} 
-                    style={[{ backgroundColor: COLORS.primary }, props.style]}
-                  />
-                )}
-                right={props => (
-                  <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                    {!employee.registered && (
-                      <MaterialCommunityIcons 
-                        name="fingerprint-off" 
-                        size={24} 
-                        color={COLORS.warning} 
-                        style={{marginRight: 8}} 
-                      />
-                    )}
-                    <MaterialCommunityIcons 
-                      name="chevron-right" 
-                      size={24} 
-                      color={COLORS.text.secondary} 
-                    />
-                  </View>
-                )}
+                style={styles.employeeCard}
                 onPress={() => handleEmployeeSelect(employee)}
-                style={styles.employeeItem}
-              />
+              >
+                <View style={styles.employeeCardContent}>
+                  <View style={styles.employeeInfo}>
+                    <Avatar.Text 
+                      size={50} 
+                      label={employee.name.substring(0, 1)} 
+                      style={styles.employeeAvatar}
+                    />
+                    <View style={styles.employeeDetails}>
+                      <Text style={styles.employeeName}>{employee.name}</Text>
+                      <Text style={styles.employeePosition}>{employee.position}</Text>
+                      <View style={styles.statusContainer}>
+                        <Ionicons name={statusIcon} size={16} color={statusColor} />
+                        <Text style={[styles.statusText, { color: statusColor }]}>{status}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.employeeActions}>
+                    {!employee.registered && (
+                      <View style={styles.fingerprintWarning}>
+                        <Ionicons name="finger-print-outline" size={20} color={COLORS.warning} />
+                      </View>
+                    )}
+                    <Ionicons name="chevron-forward" size={20} color={COLORS.text.secondary} />
+                  </View>
+                </View>
+              </TouchableOpacity>
             );
           })}
         </ScrollView>
@@ -531,13 +577,25 @@ const AttendanceScreen = () => {
     const currentTime = currentHour + (currentMinute / 60);
     return (
       <ScrollView style={styles.container}>
-        <Surface style={styles.header}>
-          <Text style={styles.headerTitle}>Biometric Attendance</Text>
-          <Text style={styles.headerSubtitle}>Manage employee attendance</Text>
-        </Surface>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => {
+              setSelectedEmployee(null);
+              setShowEmployeeSelector(true);
+            }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Record Attendance</Text>
+          </View>
+        </View>
         
+        {/* Combined Employee and Location Card */}
         <Card style={styles.selectedEmployeeCard}>
           <Card.Content>
+            {/* Employee Info Section */}
             <View style={styles.selectedEmployeeContent}>
               <Avatar.Text 
                 size={60} 
@@ -547,42 +605,43 @@ const AttendanceScreen = () => {
               <View style={styles.selectedEmployeeDetails}>
                 <Title style={styles.employeeName}>{selectedEmployee.name}</Title>
                 <Paragraph style={styles.employeePosition}>{selectedEmployee.position}</Paragraph>
-                
-                <View style={styles.statusChip}>
-                  {!employeeRecords.clockIn && (
-                    <Text style={styles.statusChipText}>Not clocked in</Text>
-                  )}
-                  {employeeRecords.clockIn && !employeeRecords.clockOut && (
-                    <Text style={[styles.statusChipText, {backgroundColor: '#E3F2FD', color: '#1976D2'}]}>
-                      Clocked in at {employeeRecords.clockIn}
-                    </Text>
-                  )}
-                  {employeeRecords.clockIn && employeeRecords.clockOut && (
-                    <Text style={[styles.statusChipText, {backgroundColor: '#E8F5E9', color: '#388E3C'}]}>
-                      Completed attendance
-                    </Text>
-                  )}
-                </View>
               </View>
+            </View>
+            
+            {/* Location Status Section */}
+            <View style={styles.locationSection}>
+              <LocationStatusCard 
+                employeeId={selectedEmployee.id}
+                onLocationCheck={handleLocationCheck}
+                refreshTrigger={locationRefreshTrigger}
+              />
             </View>
           </Card.Content>
         </Card>
         
-        <Card style={styles.card}>
+        {/* Today's Attendance Card - Third */}
+        <Card style={styles.attendanceCard}>
           <Card.Content>
-            <Title>Today's Attendance</Title>
+            <View style={styles.attendanceHeader}>
+              <Ionicons name="time" size={24} color={COLORS.primary} />
+              <Title style={styles.attendanceTitle}>Today's Attendance</Title>
+            </View>
             <Divider style={styles.divider} />
             
             <View style={styles.recordContainer}>
               <View style={styles.recordItem}>
-                <Text style={styles.recordLabel}>Clock In</Text>
+                <View style={styles.recordItemHeader}>
+                  <Text style={styles.recordLabel}>Clock In</Text>
+                </View>
                 <Text style={styles.recordValue}>
                   {employeeRecords.clockIn || 'Not recorded'}
                 </Text>
               </View>
               
               <View style={styles.recordItem}>
-                <Text style={styles.recordLabel}>Clock Out</Text>
+                <View style={styles.recordItemHeader}>
+                  <Text style={styles.recordLabel}>Clock Out</Text>
+                </View>
                 <Text style={styles.recordValue}>
                   {employeeRecords.clockOut || 'Not recorded'}
                 </Text>
@@ -628,67 +687,81 @@ const AttendanceScreen = () => {
               </>
             )}
             
+            {/* Location Warning */}
+            {isWithinRadius === false && (
+              <View style={styles.locationWarning}>
+                <Ionicons name="location" size={20} color={COLORS.error} />
+                <Text style={styles.locationWarningText}>
+                  You are {locationDistance}m away from workplace. You must be within 100m to clock in/out.
+                </Text>
+              </View>
+            )}
+
+            {isWithinRadius === null && (
+              <View style={styles.locationWarning}>
+                <Ionicons name="location-outline" size={20} color={COLORS.warning} />
+                <Text style={styles.locationWarningText}>
+                  Please check your location first before clocking in/out.
+                </Text>
+              </View>
+            )}
+
             <View style={styles.buttonContainer}>
-              <Button
-                mode="contained"
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  styles.clockInButton,
+                  (!!employeeRecords.clockIn || timeCheck.isExpired || currentTime >= WORK_END_TIME || isWithinRadius === false || isWithinRadius === null) && styles.buttonDisabled
+                ]}
                 onPress={() => handleAuthenticate('clockIn', selectedEmployee.id)}
                 disabled={
                   !!employeeRecords.clockIn || 
                   isAuthenticating || 
                   timeCheck.isExpired ||
-                  currentTime >= WORK_END_TIME
+                  currentTime >= WORK_END_TIME ||
+                  isWithinRadius === false ||
+                  isWithinRadius === null
                 }
-                loading={isAuthenticating && attendanceType === 'clockIn'}
-                style={[styles.button, { 
-                  backgroundColor: COLORS.primary, 
-                  opacity: (!!employeeRecords.clockIn || timeCheck.isExpired || currentTime >= WORK_END_TIME) ? 0.5 : 1 
-                }]}
-                icon={({ size, color }) => (
-                  <Ionicons name="finger-print" size={size} color={color} />
-                )}
               >
-                Clock In
-              </Button>
+                {isAuthenticating && attendanceType === 'clockIn' ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="log-in" size={24} color="#FFFFFF" />
+                )}
+                <Text style={styles.actionButtonText}>Clock In</Text>
+              </TouchableOpacity>
               
-              <Button
-                mode="contained"
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  styles.clockOutButton,
+                  (!employeeRecords.clockIn || 
+                   !!employeeRecords.clockOut || 
+                   currentTime < CLOCK_OUT_TIME ||
+                   currentTime >= EXTENDED_CLOCK_OUT_TIME ||
+                   isWithinRadius === false ||
+                   isWithinRadius === null) && styles.buttonDisabled
+                ]}
                 onPress={() => handleAuthenticate('clockOut', selectedEmployee.id)}
                 disabled={
                   !employeeRecords.clockIn ||
                   !!employeeRecords.clockOut ||
                   isAuthenticating ||
                   currentTime < CLOCK_OUT_TIME ||
-                  currentTime >= EXTENDED_CLOCK_OUT_TIME
+                  currentTime >= EXTENDED_CLOCK_OUT_TIME ||
+                  isWithinRadius === false ||
+                  isWithinRadius === null
                 }
-                loading={isAuthenticating && attendanceType === 'clockOut'}
-                style={[styles.button, {
-                  backgroundColor: COLORS.secondary,
-                  opacity:
-                    (!employeeRecords.clockIn || 
-                     !!employeeRecords.clockOut || 
-                     currentTime < CLOCK_OUT_TIME ||
-                     currentTime >= EXTENDED_CLOCK_OUT_TIME)
-                      ? 0.5
-                      : 1
-                }]}
-                icon={({ size, color }) => (
-                  <Ionicons name="finger-print" size={size} color={color} />
-                )}
               >
-                Clock Out
-              </Button>
+                {isAuthenticating && attendanceType === 'clockOut' ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="log-out" size={24} color="#FFFFFF" />
+                )}
+                <Text style={styles.actionButtonText}>Clock Out</Text>
+              </TouchableOpacity>
             </View>
             
-            <Button
-              mode="outlined"
-              onPress={() => {
-                setSelectedEmployee(null);
-                setShowEmployeeSelector(true);
-              }}
-              style={styles.backButton}
-            >
-              Back to Employee List
-            </Button>
           </Card.Content>
         </Card>
       </ScrollView>
@@ -709,20 +782,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.m,
+    paddingTop: SPACING.l,
+    paddingBottom: SPACING.m,
     backgroundColor: COLORS.primary,
-    padding: SPACING.l,
-    elevation: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  backButton: {
+    padding: 5,
+    marginTop: SPACING.s,
+  },
+  headerContent: {
+    flex: 1,
   },
   headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: FONT_SIZES.h2,
     fontWeight: 'bold',
-  },
-  headerSubtitle: {
     color: '#FFFFFF',
-    fontSize: 16,
-    opacity: 0.9,
-    marginTop: 4,
+    marginLeft: SPACING.m,
+    marginTop: SPACING.s,
   },
   banner: {
     marginTop: 0,
@@ -732,10 +813,35 @@ const styles = StyleSheet.create({
     margin: SPACING.m,
     elevation: 4,
   },
+  attendanceCard: {
+    margin: SPACING.m,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.l,
+    ...SHADOWS.medium,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.secondary,
+  },
+  attendanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.s,
+  },
+  attendanceTitle: {
+    marginLeft: SPACING.s,
+    color: COLORS.text.primary,
+  },
+  recordItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
   selectedEmployeeCard: {
     margin: SPACING.m,
-    elevation: 3,
     backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.l,
+    ...SHADOWS.medium,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
   },
   selectedEmployeeContent: {
     flexDirection: 'row',
@@ -745,26 +851,11 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.l,
     flex: 1,
   },
-  employeeName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  employeePosition: {
-    fontSize: 14,
-    color: COLORS.text.secondary,
-  },
-  statusChip: {
-    marginTop: SPACING.s,
-  },
-  statusChipText: {
-    backgroundColor: '#FFEBEE',
-    color: COLORS.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 16,
-    fontSize: 12,
-    alignSelf: 'flex-start',
-    marginTop: 4,
+  locationSection: {
+    marginTop: SPACING.m,
+    paddingTop: SPACING.m,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider,
   },
   divider: {
     marginVertical: SPACING.m,
@@ -778,26 +869,32 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: SPACING.xs,
   },
-  backButton: {
-    marginTop: SPACING.l,
-    borderColor: COLORS.primary,
-    borderWidth: 1,
-  },
   recordContainer: {
     marginTop: SPACING.m,
   },
   recordItem: {
     marginBottom: SPACING.m,
+    paddingVertical: SPACING.m,
+    paddingHorizontal: SPACING.l,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.m,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    ...SHADOWS.small,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   recordLabel: {
-    fontSize: 16,
-    color: COLORS.text.secondary,
-    marginBottom: 4,
+    fontSize: FONT_SIZES.body,
+    color: COLORS.text.primary,
+    fontWeight: '600',
   },
   recordValue: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: COLORS.text.primary,
+    fontSize: FONT_SIZES.h2,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textAlign: 'right',
   },
   loadingContainer: {
     flex: 1,
@@ -816,10 +913,107 @@ const styles = StyleSheet.create({
   employeeList: {
     flex: 1,
   },
-  employeeItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
-    paddingVertical: SPACING.s,
+  employeeCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: SPACING.m,
+    marginVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.m,
+    ...SHADOWS.small,
+  },
+  employeeCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.m,
+  },
+  employeeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  employeeAvatar: {
+    backgroundColor: COLORS.primary,
+  },
+  employeeDetails: {
+    marginLeft: SPACING.m,
+    flex: 1,
+  },
+  employeeName: {
+    fontSize: FONT_SIZES.body,
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+    marginBottom: 2,
+  },
+  employeePosition: {
+    fontSize: FONT_SIZES.caption,
+    color: COLORS.text.secondary,
+    marginBottom: SPACING.xs,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: FONT_SIZES.caption,
+    fontWeight: '600',
+    marginLeft: SPACING.xs,
+  },
+  employeeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fingerprintWarning: {
+    backgroundColor: COLORS.warning + '20',
+    borderRadius: 20,
+    padding: SPACING.xs,
+    marginRight: SPACING.s,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.l,
+    paddingHorizontal: SPACING.m,
+    borderRadius: BORDER_RADIUS.m,
+    marginHorizontal: SPACING.xs,
+    ...SHADOWS.small,
+  },
+  clockInButton: {
+    backgroundColor: COLORS.primary,
+    marginBottom: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  clockOutButton: {
+    backgroundColor: COLORS.secondary,
+    marginBottom: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.body,
+    fontWeight: 'bold',
+    marginLeft: SPACING.s,
+  },
+  locationWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.error + '20',
+    padding: SPACING.m,
+    borderRadius: BORDER_RADIUS.s,
+    marginVertical: SPACING.s,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.error,
+  },
+  locationWarningText: {
+    flex: 1,
+    marginLeft: SPACING.s,
+    fontSize: FONT_SIZES.caption,
+    color: COLORS.error,
+    fontWeight: '500',
   },
 });
 
