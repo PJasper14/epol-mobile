@@ -65,13 +65,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Check for existing session on app load
+  // Check for existing session on app load (only for refresh scenarios)
   React.useEffect(() => {
     const loadUser = async () => {
       try {
         const userJson = await AsyncStorage.getItem('user');
-        if (userJson) {
-          setUser(JSON.parse(userJson));
+        const token = await AsyncStorage.getItem('token');
+        
+        if (userJson && token) {
+          // Validate token by making a test API call
+          try {
+            const response = await apiService.getCurrentUser();
+            if (response.data?.user) {
+              setUser(JSON.parse(userJson));
+            } else {
+              // Token is invalid, clear storage
+              await AsyncStorage.removeItem('user');
+              await AsyncStorage.removeItem('token');
+            }
+          } catch (error) {
+            // Token is invalid or expired, clear storage
+            await AsyncStorage.removeItem('user');
+            await AsyncStorage.removeItem('token');
+            console.log('Token validation failed, user must log in again');
+          }
         }
       } catch (error) {
         console.error('Failed to load user from storage', error);
@@ -107,11 +124,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async (): Promise<void> => {
     try {
+      // Try to call API logout, but don't fail if it doesn't work
       await apiService.logout();
-      await AsyncStorage.removeItem('user');
-      setUser(null);
     } catch (error) {
-      console.error('Logout error:', error);
+      console.log('API logout failed (token may be expired), proceeding with local logout');
+    } finally {
+      // Always clear local storage and user state, regardless of API call result
+      await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('token');
+      setUser(null);
     }
   };
 
