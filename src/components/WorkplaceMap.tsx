@@ -33,16 +33,22 @@ const WorkplaceMap: React.FC<WorkplaceMapProps> = ({
 
   useEffect(() => {
     if (visible) {
-      // Fetch assigned location if not provided
-      if (!assignedLocation) {
-        fetchAssignedLocation();
+      // Use the assigned location passed as prop
+      if (propAssignedLocation) {
+        setAssignedLocation(propAssignedLocation);
+        setRegion({
+          latitude: propAssignedLocation.latitude,
+          longitude: propAssignedLocation.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        });
       }
       
       if (showCurrentLocation) {
         getCurrentLocation();
       }
     }
-  }, [visible, showCurrentLocation]);
+  }, [visible, showCurrentLocation, propAssignedLocation]);
 
   const fetchAssignedLocation = async () => {
     try {

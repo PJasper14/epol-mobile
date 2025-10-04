@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'https://tricky-beans-crash.loca.lt/api'; // Tunnel URL for mobile access
+const API_BASE_URL = 'https://nonlitigious-jasmine-untortuous.ngrok-free.dev/api'; // Tunnel URL for mobile access
 
 interface ApiResponse<T> {
   data?: T;
@@ -52,6 +52,7 @@ class ApiService {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       ...(options.headers as Record<string, string>),
     };
 
@@ -398,6 +399,15 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  // User/Employee endpoints
+  async getUsers() {
+    return this.request<any>('/users');
+  }
+
+  async getUser(id: string) {
+    return this.request<any>(`/users/${id}`);
   }
 
 }

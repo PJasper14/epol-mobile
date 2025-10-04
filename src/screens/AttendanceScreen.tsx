@@ -8,31 +8,11 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import LocationStatusCard from '../components/LocationStatusCard';
+import { apiService } from '../services/ApiService';
+import { useAuth } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
-// Mock employee data for demonstration
-const EMPLOYEES = [
-  { id: '1', name: 'John Doe', position: 'Officer', registered: true },
-  { id: '2', name: 'Jane Smith', position: 'Supervisor', registered: true },
-  { id: '3', name: 'Alex Johnson', position: 'Team Lead', registered: true },
-  { id: '4', name: 'Sam Williams', position: 'Officer', registered: true },
-  { id: '5', name: 'Taylor Brown', position: 'Officer', registered: true },
-  { id: '6', name: 'Totoy Brown', position: 'Officer', registered: true },
-  { id: '7', name: 'Neneng Brown', position: 'Officer', registered: true },
-  { id: '8', name: 'Rodel Brown', position: 'Officer', registered: true },
-  { id: '9', name: 'AKo to', position: 'Officer', registered: true },
-  { id: '10', name: 'Test TWO', position: 'Officer', registered: true },
-  { id: '11', name: 'Test THREE', position: 'Officer', registered: true },
-  { id: '12', name: 'Test FOUR', position: 'Officer', registered: true },
-  { id: '13', name: 'Test FIVE', position: 'Officer', registered: true },
-  { id: '14', name: 'Test SIX', position: 'Officer', registered: true },
-  { id: '15', name: 'Test SEVEN', position: 'Officer', registered: true },
-  { id: '16', name: 'Test EIGHT', position: 'Officer', registered: true },
-  { id: '17', name: 'Test NINE', position: 'Officer', registered: true },
-  { id: '18', name: 'Test TEN', position: 'Officer', registered: true },
-
-];
 
 const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
 const ALLOWED_CLOCK_IN_START = 14; // 2:00 PM in 24-hour format
@@ -42,13 +22,15 @@ const ALLOWED_CLOCK_IN_END = 15.5;   // 3:30 PM in 24-hour format
 const CLOCK_OUT_TIME = 18.5;       // 6:30 PM in decimal format (18 + 30/60)
 const EXTENDED_CLOCK_OUT_TIME = 18.67; // 6:40 PM in decimal format (18 + 40/60)
 
-const AttendanceScreen = () => {
+const AttendanceScreen = ({ route }: any) => {
   const navigation = useNavigation();
+  const { user } = useAuth();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showEmployeeSelector, setShowEmployeeSelector] = useState(true); // Start with employee selector
-  const [selectedEmployee, setSelectedEmployee] = useState<typeof EMPLOYEES[0] | null>(null);
+  const [showEmployeeSelector, setShowEmployeeSelector] = useState(user?.role !== 'street_sweeper' && user?.role !== 'epol'); // Street sweepers and EPOL officers skip employee selector
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
   const [attendanceType, setAttendanceType] = useState<'clockIn' | 'clockOut'>('clockIn');
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, any>>({});
   const [showBanner, setShowBanner] = useState(true);
@@ -62,14 +44,93 @@ const AttendanceScreen = () => {
   const [locationRefreshTrigger, setLocationRefreshTrigger] = useState(0);
 
   // Filter employees based on search query
-  const filteredEmployees = EMPLOYEES.filter(employee => 
+  const filteredEmployees = employees.filter(employee => 
     employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     employee.position.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   useEffect(() => {
+    loadEmployees();
     loadAllAttendanceData();
   }, []);
+
+  // Handle navigation parameters for auto-selection
+  useEffect(() => {
+    if (route?.params?.autoSelectUser) {
+      const { userId, userName, userPosition } = route.params;
+      const autoSelectedEmployee = {
+        id: userId.toString(),
+        name: userName,
+        position: userPosition,
+        registered: true
+      };
+      setSelectedEmployee(autoSelectedEmployee);
+      setShowEmployeeSelector(false);
+    } else if ((user?.role === 'street_sweeper' || user?.role === 'epol') && user.id) {
+      // Fallback for street sweepers and EPOL officers without navigation params
+      const position = user.role === 'street_sweeper' ? 'Street Sweeper' : 'EPOL Officer';
+      const currentUserEmployee = {
+        id: user.id.toString(),
+        name: `${user.first_name} ${user.last_name}`,
+        position: position,
+        registered: true
+      };
+      setSelectedEmployee(currentUserEmployee);
+      setShowEmployeeSelector(false);
+    }
+  }, [user, route?.params]);
+
+  const loadEmployees = async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.getUsers();
+      if (response.data) {
+        let filteredUsers = [];
+        
+        if (user?.role === 'street_sweeper') {
+          // Street sweepers only see themselves
+          filteredUsers = response.data.filter((u: any) => u.id === user.id);
+        } else if (user?.role === 'team_leader') {
+          // Team leaders see only their team members (same location assignment)
+          const currentUserAssignment = user.current_assignment;
+          if (currentUserAssignment?.workplace_location) {
+            const currentLocationId = currentUserAssignment.workplace_location.id;
+            filteredUsers = response.data.filter((u: any) => {
+              // Include the team leader themselves
+              if (u.id === user.id) return true;
+              // Include other users assigned to the same location
+              return u.current_assignment?.workplace_location?.id === currentLocationId;
+            });
+          } else {
+            // If no assignment, only show themselves
+            filteredUsers = response.data.filter((u: any) => u.id === user.id);
+          }
+        } else {
+          // EPOL and other roles see all EPOL and team leader users
+          filteredUsers = response.data.filter((u: any) => 
+            u.role === 'epol' || u.role === 'team_leader'
+          );
+        }
+        
+        // Transform the API response to match the expected format
+        const transformedEmployees = filteredUsers.map((u: any) => ({
+          id: u.id.toString(),
+          name: `${u.first_name} ${u.last_name}`,
+          position: u.role === 'epol' ? 'EPOL Officer' : 
+                   u.role === 'team_leader' ? 'Team Leader' : 
+                   u.role === 'street_sweeper' ? 'Street Sweeper' :
+                   u.role || 'Officer',
+          registered: true
+        }));
+        setEmployees(transformedEmployees);
+      }
+    } catch (error) {
+      console.error('Error loading employees:', error);
+      Alert.alert('Error', 'Failed to load employees');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -168,7 +229,7 @@ const AttendanceScreen = () => {
       await AsyncStorage.setItem('attendance_records', JSON.stringify(records));
       setAttendanceRecords(records);
       
-      const employeeName = EMPLOYEES.find(emp => emp.id === employeeId)?.name || 'Employee';
+      const employeeName = employees.find(emp => emp.id === employeeId)?.name || 'Employee';
       Alert.alert(
         'Success',
         type === 'clockIn'
@@ -216,7 +277,7 @@ const AttendanceScreen = () => {
     };
   };
 
-  const handleEmployeeSelect = (employee: typeof EMPLOYEES[0]) => {
+  const handleEmployeeSelect = (employee: any) => {
     setSelectedEmployee(employee);
     setShowEmployeeSelector(false);
     
@@ -355,9 +416,10 @@ const AttendanceScreen = () => {
             
             // Update employee as registered in the mock data
             // In a real app, this would be stored in a database
-            const updatedEmployees = EMPLOYEES.map(emp => 
+            const updatedEmployees = employees.map(emp => 
               emp.id === employeeId ? {...emp, registered: true} : emp
             );
+            setEmployees(updatedEmployees);
             
             Alert.alert('Registration Successful', 'Fingerprint has been registered successfully.');
             
@@ -432,7 +494,7 @@ const AttendanceScreen = () => {
       }
       
       // Find employee name for display
-      const employeeName = EMPLOYEES.find(emp => emp.id === employeeId)?.name || 'Employee';
+      const employeeName = employees.find(emp => emp.id === employeeId)?.name || 'Employee';
       
       // Authenticate with biometrics
       const result = await LocalAuthentication.authenticateAsync({
@@ -464,8 +526,8 @@ const AttendanceScreen = () => {
     );
   }
 
-  // Employee selection screen - Always shown first
-  if (showEmployeeSelector) {
+  // Employee selection screen - Not shown for street sweepers, EPOL officers, or when auto-selecting
+  if (showEmployeeSelector && !route?.params?.autoSelectUser && user?.role !== 'street_sweeper' && user?.role !== 'epol' && employees.length > 0) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -554,6 +616,19 @@ const AttendanceScreen = () => {
     );
   }
 
+  // For street sweepers, EPOL officers, or auto-selection, ensure they always have a selected employee
+  if ((user?.role === 'street_sweeper' || user?.role === 'epol' || route?.params?.autoSelectUser) && !selectedEmployee && user?.id) {
+    const position = user.role === 'street_sweeper' ? 'Street Sweeper' : 'EPOL Officer';
+    const currentUserEmployee = {
+      id: user.id.toString(),
+      name: `${user.first_name} ${user.last_name}`,
+      position: position,
+      registered: true
+    };
+    setSelectedEmployee(currentUserEmployee);
+    setShowEmployeeSelector(false);
+  }
+
   // Attendance action screen - Shown after employee is selected
   if (selectedEmployee) {
     const today = new Date().toISOString().split('T')[0];
@@ -581,8 +656,14 @@ const AttendanceScreen = () => {
           <TouchableOpacity 
             style={styles.backButton}
             onPress={() => {
-              setSelectedEmployee(null);
-              setShowEmployeeSelector(true);
+              if (user?.role === 'epol') {
+                // For EPOL officers, go back to home/dashboard
+                navigation.goBack();
+              } else {
+                // For other roles, go back to employee selection
+                setSelectedEmployee(null);
+                setShowEmployeeSelector(true);
+              }
             }}
           >
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />

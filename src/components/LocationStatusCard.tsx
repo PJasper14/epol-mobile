@@ -30,6 +30,11 @@ const LocationStatusCard: React.FC<LocationStatusCardProps> = ({
     checkLocation();
   }, [refreshTrigger]);
 
+  // Also check location on component mount
+  useEffect(() => {
+    checkLocation();
+  }, []);
+
   useEffect(() => {
     if (assignedLocation) {
       getWorkplaceAddress(assignedLocation).then(setWorkplaceAddress);
@@ -41,8 +46,12 @@ const LocationStatusCard: React.FC<LocationStatusCardProps> = ({
     setError('');
     
     try {
-      const result = await isWithinWorkplaceRadius();
-      
+      // For "current" employeeId, don't pass any parameter to get current user's assignment
+      // For specific employee IDs, pass the employeeId to get their assignment
+      const result = employeeId === "current" 
+        ? await isWithinWorkplaceRadius() 
+        : await isWithinWorkplaceRadius(employeeId);
+        
       setIsWithinRadius(result.isWithinRadius);
       setDistance(result.distance);
       setAssignedLocation(result.assignedLocation);
@@ -146,6 +155,7 @@ const LocationStatusCard: React.FC<LocationStatusCardProps> = ({
               </Text>
             </View>
           )}
+          
 
           {/* Error Message */}
           {error && (

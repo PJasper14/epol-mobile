@@ -5,20 +5,19 @@ export interface EmployeeAssignment {
   id: string;
   user_id: string;
   workplace_location_id: string;
-  assigned_by: string;
-  workplaceLocation?: {
-    id: string;
-    name: string;
-    latitude: number;
-    longitude: number;
-    radius: number;
-    description?: string;
-    is_active: boolean;
-  };
-  assignedBy?: {
+  assigned_by: string | {
     id: string;
     first_name: string;
     last_name: string;
+  };
+  workplace_location?: {
+    id: string;
+    name: string;
+    latitude: string;
+    longitude: string;
+    radius: number;
+    description?: string;
+    is_active: boolean;
   };
   created_at: string;
   updated_at: string;
@@ -43,10 +42,10 @@ class AssignmentService {
     try {
       const response = await apiService.getMyAssignment();
       
-      if (response.data?.assignment) {
-        this.cachedAssignment = response.data.assignment;
+      if ((response as any).assignment) {
+        this.cachedAssignment = (response as any).assignment;
         this.lastFetchTime = now;
-        return response.data.assignment;
+        return (response as any).assignment;
       } else {
         this.cachedAssignment = null;
         return null;
@@ -64,19 +63,54 @@ class AssignmentService {
   async getMyWorkplaceLocation(forceRefresh: boolean = false): Promise<WorkplaceLocation | null> {
     const assignment = await this.getMyAssignment(forceRefresh);
     
-    if (!assignment || !assignment.workplaceLocation) {
+    if (!assignment || !assignment.workplace_location) {
       return null;
     }
 
-    return {
-      id: assignment.workplaceLocation.id.toString(),
-      name: assignment.workplaceLocation.name,
-      latitude: parseFloat(assignment.workplaceLocation.latitude.toString()),
-      longitude: parseFloat(assignment.workplaceLocation.longitude.toString()),
-      radius: parseInt(assignment.workplaceLocation.radius.toString()),
-      address: assignment.workplaceLocation.description,
-      isActive: assignment.workplaceLocation.is_active,
+    const workplaceLocation = {
+      id: assignment.workplace_location.id.toString(),
+      name: assignment.workplace_location.name,
+      latitude: parseFloat(assignment.workplace_location.latitude.toString()),
+      longitude: parseFloat(assignment.workplace_location.longitude.toString()),
+      radius: parseInt(assignment.workplace_location.radius.toString()),
+      address: assignment.workplace_location.description,
+      isActive: assignment.workplace_location.is_active,
     };
+    
+    return workplaceLocation;
+  }
+
+  /**
+   * Get workplace location for a specific employee
+   */
+  async getEmployeeWorkplaceLocation(employeeId: string): Promise<WorkplaceLocation | null> {
+    try {
+      const response = await apiService.getUser(employeeId);
+      
+      // Handle both camelCase and snake_case from API
+      // The API returns user data directly, not wrapped in a 'user' object
+      const user = (response as any).user || (response as any);
+      const currentAssignment = user.current_assignment || user.currentAssignment;
+      
+      if (user && currentAssignment && currentAssignment.workplace_location) {
+        const workplaceLocation = {
+          id: currentAssignment.workplace_location.id.toString(),
+          name: currentAssignment.workplace_location.name,
+          latitude: parseFloat(currentAssignment.workplace_location.latitude.toString()),
+          longitude: parseFloat(currentAssignment.workplace_location.longitude.toString()),
+          radius: parseInt(currentAssignment.workplace_location.radius.toString()),
+          address: currentAssignment.workplace_location.description,
+          isActive: currentAssignment.workplace_location.is_active,
+        };
+        
+        return workplaceLocation;
+      } else {
+        return null;
+      }
+    } catch (error) {
+      console.error('Failed to fetch employee assignment:', error);
+      return null;
+    }
   }
 
   /**

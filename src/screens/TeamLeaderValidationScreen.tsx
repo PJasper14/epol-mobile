@@ -18,6 +18,8 @@ import * as Location from 'expo-location';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../utils/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PhotoViewerModal from '../components/PhotoViewerModal';
+import { apiService } from '../services/ApiService';
+import { useAuth } from '../context/AuthContext';
 
 interface Employee {
   id: string;
@@ -45,30 +47,10 @@ interface WatermarkData {
   validationType: string;
 }
 
-// Mock employee data for demonstration
-const EMPLOYEES = [
-  { id: '1', name: 'John Doe', position: 'Officer', registered: true },
-  { id: '2', name: 'Jane Smith', position: 'Supervisor', registered: true },
-  { id: '3', name: 'Alex Johnson', position: 'Team Lead', registered: true },
-  { id: '4', name: 'Sam Williams', position: 'Officer', registered: true },
-  { id: '5', name: 'Taylor Brown', position: 'Officer', registered: true },
-  { id: '6', name: 'Totoy Brown', position: 'Officer', registered: true },
-  { id: '7', name: 'Neneng Brown', position: 'Officer', registered: true },
-  { id: '8', name: 'Rodel Brown', position: 'Officer', registered: true },
-  { id: '9', name: 'AKo to', position: 'Officer', registered: true },
-  { id: '10', name: 'Test TWO', position: 'Officer', registered: true },
-  { id: '11', name: 'Test THREE', position: 'Officer', registered: true },
-  { id: '12', name: 'Test FOUR', position: 'Officer', registered: true },
-  { id: '13', name: 'Test FIVE', position: 'Officer', registered: true },
-  { id: '14', name: 'Test SIX', position: 'Officer', registered: true },
-  { id: '15', name: 'Test SEVEN', position: 'Officer', registered: true },
-  { id: '16', name: 'Test EIGHT', position: 'Officer', registered: true },
-  { id: '17', name: 'Test NINE', position: 'Officer', registered: true },
-  { id: '18', name: 'Test TEN', position: 'Officer', registered: true },
-];
 
 const TeamLeaderValidationScreen = () => {
   const navigation = useNavigation();
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -98,6 +80,54 @@ const TeamLeaderValidationScreen = () => {
     }
   }, [searchQuery, employees]);
 
+  const loadEmployeesFromAPI = async () => {
+    try {
+      const response = await apiService.getUsers();
+      if (response.data) {
+        let filteredUsers = [];
+        
+        if (user?.role === 'team_leader') {
+          // Team leaders see only their team members (same location assignment)
+          const currentUserAssignment = user.current_assignment;
+          if (currentUserAssignment?.workplace_location) {
+            const currentLocationId = currentUserAssignment.workplace_location.id;
+            filteredUsers = response.data.filter((u: any) => {
+              // Include the team leader themselves
+              if (u.id === user.id) return true;
+              // Include other users assigned to the same location
+              return u.current_assignment?.workplace_location?.id === currentLocationId;
+            });
+          } else {
+            // If no assignment, only show themselves
+            filteredUsers = response.data.filter((u: any) => u.id === user.id);
+          }
+        } else {
+          // EPOL and other roles see all EPOL and team leader users
+          filteredUsers = response.data.filter((u: any) => 
+            u.role === 'epol' || u.role === 'team_leader'
+          );
+        }
+        
+        // Transform the API response to match the expected format
+        const transformedEmployees = filteredUsers.map((user: any) => ({
+          id: user.id.toString(),
+          name: `${user.first_name} ${user.last_name}`,
+          position: user.role === 'epol' ? 'EPOL Officer' : 
+                   user.role === 'team_leader' ? 'Team Leader' : 
+                   user.role === 'street_sweeper' ? 'Street Sweeper' :
+                   user.role || 'Officer',
+          registered: true
+        }));
+        return transformedEmployees;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading employees:', error);
+      Alert.alert('Error', 'Failed to load employees');
+      return [];
+    }
+  };
+
   const loadEmployees = async () => {
     try {
       setLoading(true);
@@ -109,8 +139,11 @@ const TeamLeaderValidationScreen = () => {
       // Get today's records
       const todayRecords = attendanceRecords[today] || {};
 
+      // Load employees from API first
+      const apiEmployees = await loadEmployeesFromAPI();
+      
       // Map employees with their attendance records
-      const employeesWithAttendance = EMPLOYEES.map(employee => {
+      const employeesWithAttendance = apiEmployees.map(employee => {
         const employeeRecord = todayRecords[employee.id] || {};
         const timeIn = employeeRecord.clockIn;
         const timeOut = employeeRecord.clockOut;

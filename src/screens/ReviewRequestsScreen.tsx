@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../utils/theme';
+import { apiService } from '../services/ApiService';
+import { useAuth } from '../context/AuthContext';
 
 interface Employee {
   id: string;
@@ -38,6 +40,7 @@ interface ReassignmentRequest {
 }
 
 const ReassignmentRequestScreen: React.FC = () => {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,55 +55,6 @@ const ReassignmentRequestScreen: React.FC = () => {
   const [requestedLocationId, setRequestedLocationId] = useState<string>('');
   const [reason, setReason] = useState('');
 
-  // Mock data
-  const mockEmployees: Employee[] = [
-    {
-      id: 'emp-1',
-      name: 'John Smith',
-      position: 'EPOL',
-      currentLocationId: 'location-1',
-      currentLocation: 'Workplace Location 1',
-    },
-    {
-      id: 'emp-2',
-      name: 'Maria Garcia',
-      position: 'EPOL',
-      currentLocationId: 'location-2',
-      currentLocation: 'Workplace Location 2',
-    },
-    {
-      id: 'emp-3',
-      name: 'David Johnson',
-      position: 'EPOL',
-      currentLocationId: 'location-3',
-      currentLocation: 'Workplace Location 3',
-    },
-    {
-      id: 'emp-4',
-      name: 'Sarah Wilson',
-      position: 'EPOL',
-      currentLocationId: undefined,
-      currentLocation: 'No assignment',
-    },
-  ];
-
-  const mockLocations: Location[] = [
-    {
-      id: 'location-1',
-      name: 'Workplace Location 1',
-      address: 'Location 1 Address, Cabuyao, Laguna',
-    },
-    {
-      id: 'location-2',
-      name: 'Workplace Location 2',
-      address: 'Location 2 Address, Cabuyao, Laguna',
-    },
-    {
-      id: 'location-3',
-      name: 'Workplace Location 3',
-      address: 'Location 3 Address, Cabuyao, Laguna',
-    },
-  ];
 
   useEffect(() => {
     loadData();
@@ -109,11 +63,55 @@ const ReassignmentRequestScreen: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setEmployees(mockEmployees);
-      setLocations(mockLocations);
+      // Load employees and locations from API
+      const [employeesResponse, locationsResponse] = await Promise.all([
+        apiService.getUsers(),
+        apiService.getWorkplaceLocations()
+      ]);
+
+      if (employeesResponse.data) {
+        // Filter employees based on team leader's location assignment
+        let filteredUsers = [];
+        
+        if (user?.role === 'team_leader' && user.current_assignment?.workplace_location) {
+          // For team leaders, show only their team members (same location assignment)
+          const currentLocationId = user.current_assignment.workplace_location.id;
+          filteredUsers = employeesResponse.data.filter((u: any) => {
+            // Include the team leader themselves
+            if (u.id === user.id) return true;
+            // Include EPOL officers assigned to the same location
+            return u.role === 'epol' && u.current_assignment?.workplace_location?.id === currentLocationId;
+          });
+        } else {
+          // For other roles, show all users except admins
+          filteredUsers = employeesResponse.data.filter((u: any) => u.role !== 'admin');
+        }
+        
+        // Transform employees data
+        const transformedEmployees = filteredUsers.map((user: any) => ({
+          id: user.id.toString(),
+          name: `${user.first_name} ${user.last_name}`,
+          position: user.role === 'epol' ? 'EPOL Officer' : 
+                   user.role === 'team_leader' ? 'Team Leader' : 
+                   user.role === 'street_sweeper' ? 'Street Sweeper' : 
+                   user.role || 'Officer',
+          currentLocationId: user.current_assignment?.workplace_location_id?.toString(),
+          currentLocation: user.current_assignment?.workplace_location?.name || 'No assignment'
+        }));
+        setEmployees(transformedEmployees);
+      }
+
+      if (locationsResponse.data) {
+        // Transform locations data
+        const transformedLocations = locationsResponse.data.map((location: any) => ({
+          id: location.id.toString(),
+          name: location.name,
+          address: location.address
+        }));
+        setLocations(transformedLocations);
+      }
     } catch (error) {
+      console.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load data');
     } finally {
       setLoading(false);
@@ -280,7 +278,9 @@ const ReassignmentRequestScreen: React.FC = () => {
 
             {/* Reason */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Reason for Request</Text>
+              <Text style={styles.sectionTitle}>
+                Reason for Request <Text style={styles.requiredAsterisk}>*</Text>
+              </Text>
               <TextInput
                 style={styles.reasonInput}
                 placeholder="Please provide a detailed reason for this request..."
@@ -369,7 +369,15 @@ const ReassignmentRequestScreen: React.FC = () => {
             <View style={{ width: 24 }} />
           </View>
           <ScrollView style={styles.modalContent}>
-            {locations.map((location) => (
+            {locations
+              .filter((location) => {
+                // When selecting requested location, exclude the current location
+                if (!isCurrentLocation && currentLocationId) {
+                  return location.id !== currentLocationId;
+                }
+                return true;
+              })
+              .map((location) => (
               <TouchableOpacity
                 key={location.id}
                 style={styles.locationItem}
@@ -566,6 +574,10 @@ const styles = StyleSheet.create({
   locationAddress: {
     fontSize: FONT_SIZES.caption,
     color: COLORS.text.secondary,
+  },
+  requiredAsterisk: {
+    color: COLORS.error,
+    fontWeight: 'bold',
   },
 });
 

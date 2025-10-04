@@ -41,7 +41,10 @@ export const isWithinWorkplaceRadius = async (employeeId?: string): Promise<{
 }> => {
   try {
     // Get employee's assigned location from API
-    const assignedLocation = await assignmentService.getMyWorkplaceLocation();
+    const assignedLocation = employeeId 
+      ? await assignmentService.getEmployeeWorkplaceLocation(employeeId)
+      : await assignmentService.getMyWorkplaceLocation();
+    
     if (!assignedLocation) {
       return {
         isWithinRadius: false,

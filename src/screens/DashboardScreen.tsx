@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { COLORS, SPACING, SHADOWS } from '../utils/theme';
 import { useAuth } from '../context/AuthContext';
+import { apiService } from '../services/ApiService';
 
 type QuickActionProps = {
   icon: string;
@@ -132,27 +133,35 @@ const DashboardScreen = () => {
     try {
       setLoading(true);
       
-      // Get attendance data
+      // Get current user's attendance data
       const attendanceData = await AsyncStorage.getItem('attendance_records');
       if (attendanceData) {
         const records = JSON.parse(attendanceData);
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         
-        if (records[today]) {
-          setAttendanceToday(records[today]);
+        if (records[today] && user?.id) {
+          setAttendanceToday(records[today][user.id.toString()] || null);
         } else {
           setAttendanceToday(null);
         }
 
-        // Calculate attendance stats for today
-        const todayRecords = Object.values(records).filter((record: any) => 
-          record.date === today
-        );
-        const presentCount = todayRecords.filter((record: any) => record.clockIn).length;
-        setAttendanceStats({
-          present: presentCount,
-          total: todayRecords.length || 20 // Default to 20 if no records
-        });
+        // Calculate team attendance stats based on user role
+        if (user?.role === 'team_leader' && user.current_assignment?.workplace_location) {
+          // For team leaders, get stats for their team members
+          const teamMembers = await getTeamMembers();
+          const teamStats = await calculateTeamAttendanceStats(teamMembers, records, today);
+          setAttendanceStats(teamStats);
+        } else {
+          // For other roles, get general stats
+          const todayRecords = Object.values(records).filter((record: any) => 
+            record.date === today
+          );
+          const presentCount = todayRecords.filter((record: any) => record.clockIn).length;
+          setAttendanceStats({
+            present: presentCount,
+            total: todayRecords.length || 0
+          });
+        }
       }
       
       // Get incidents count from AsyncStorage
@@ -204,13 +213,73 @@ const DashboardScreen = () => {
     }
   };
 
+  // Get team members for team leaders
+  const getTeamMembers = async () => {
+    try {
+      if (!user?.current_assignment?.workplace_location) return [];
+      
+      const response = await apiService.getUsers();
+      if (response.data) {
+        const currentLocationId = user.current_assignment.workplace_location.id;
+        return response.data.filter((u: any) => {
+          // Include the team leader themselves
+          if (u.id === user.id) return true;
+          // Include other users assigned to the same location
+          return u.current_assignment?.workplace_location?.id === currentLocationId;
+        });
+      }
+      return [];
+    } catch (error) {
+      console.error('Error getting team members:', error);
+      return [];
+    }
+  };
+
+  // Calculate team attendance statistics
+  const calculateTeamAttendanceStats = async (teamMembers: any[], records: any, today: string) => {
+    try {
+      let presentCount = 0;
+      let totalCount = teamMembers.length;
+
+      teamMembers.forEach(member => {
+        const memberId = member.id.toString();
+        if (records[today] && records[today][memberId] && records[today][memberId].clockIn) {
+          presentCount++;
+        }
+      });
+
+      return {
+        present: presentCount,
+        total: totalCount
+      };
+    } catch (error) {
+      console.error('Error calculating team stats:', error);
+      return { present: 0, total: 0 };
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadDashboardData();
   };
 
   const navigateToAttendance = () => {
-    navigation.navigate('AttendanceTab', { screen: 'AttendanceHome' });
+    if (user?.role === 'street_sweeper' || user?.role === 'epol') {
+      // For street sweepers and EPOL officers, navigate directly to their attendance record
+      const position = user.role === 'street_sweeper' ? 'Street Sweeper' : 'EPOL Officer';
+      navigation.navigate('AttendanceTab', { 
+        screen: 'AttendanceHome',
+        params: { 
+          autoSelectUser: true,
+          userId: user.id,
+          userName: `${user.first_name} ${user.last_name}`,
+          userPosition: position
+        }
+      });
+    } else {
+      // For other roles (team leaders, admins), go to the standard attendance screen
+      navigation.navigate('AttendanceTab', { screen: 'AttendanceHome' });
+    }
   };
 
   const navigateToRemarks = () => {
@@ -551,7 +620,7 @@ const DashboardScreen = () => {
                 icon="finger-print" 
                 label="Record Attendance" 
                 onPress={navigateToAttendance} 
-                disabled={!!attendanceToday?.clockOut}
+                disabled={false}
                 color={attendanceToday?.clockIn ? COLORS.success : COLORS.primary}
                 badge={attendanceToday?.clockIn ? 1 : 0}
               />
@@ -601,23 +670,7 @@ const DashboardScreen = () => {
               />
             </View>
             <View style={styles.sidebarUserDetails}>
-              <Text style={styles.sidebarUserName}>
-                {user?.first_name && user?.last_name 
-                  ? `${user.first_name} ${user.last_name}` 
-                  : 'Officer'
-                }
-              </Text>
-              <Text style={styles.sidebarUserRole}>
-                {user?.role === 'epol' ? 'EPOL Officer' : 
-                 user?.role === 'team_leader' ? 'Team Leader' : 
-                 user?.role === 'street_sweeper' ? 'Street Sweeper' : 
-                 user?.role || 'Officer'}
-              </Text>
-              {currentAssignment?.workplace_location && (
-                <Text style={styles.sidebarLocationText}>
-                  {currentAssignment.workplace_location.name}
-                </Text>
-              )}
+              <Text style={styles.sidebarTitle}>EPOL (Environmental Police)</Text>
             </View>
           </View>
           <TouchableOpacity onPress={closeSidebar} style={styles.sidebarCloseButton}>
@@ -1083,21 +1136,10 @@ const styles = StyleSheet.create({
   sidebarUserDetails: {
     flex: 1,
   },
-  sidebarUserName: {
+  sidebarTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  sidebarUserRole: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 14,
-    textTransform: 'capitalize',
-  },
-  sidebarLocationText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    marginTop: 2,
   },
   sidebarCloseButton: {
     padding: SPACING.s,

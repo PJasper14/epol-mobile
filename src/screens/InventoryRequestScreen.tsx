@@ -294,102 +294,12 @@ const InventoryRequestScreen = () => {
   };
 
   const getSuggestedItems = () => {
-    // Use API data if available, otherwise fallback to mock data
-    const itemsToUse = allInventoryItems.length > 0 ? allInventoryItems : [
-      {
-        id: '1',
-        name: 'Sako',
-        quantity: 2000,
-        threshold: 500,
-        unit: 'Bundles'
-      },
-      {
-        id: '2',
-        name: 'Dust Pan',
-        quantity: 1200,
-        threshold: 300,
-        unit: 'Pcs'
-      },
-      {
-        id: '3',
-        name: 'Walis Tingting (Kaong)',
-        quantity: 2400,
-        threshold: 500,
-        unit: 'Pcs'
-      },
-      {
-        id: '4',
-        name: 'Knitted Gloves',
-        quantity: 4000,
-        threshold: 1000,
-        unit: 'Pairs'
-      },
-      {
-        id: '5',
-        name: 'Rubber Gloves',
-        quantity: 400,
-        threshold: 100,
-        unit: 'Pairs'
-      },
-      {
-        id: '6',
-        name: 'Raincoat',
-        quantity: 500,
-        threshold: 100,
-        unit: 'Pcs'
-      },
-      {
-        id: '7',
-        name: 'Sickle (Karit) RS Brand',
-        quantity: 0,
-        threshold: 50,
-        unit: 'Pcs'
-      },
-      {
-        id: '8',
-        name: 'Panabas (Itak) RS Brand',
-        quantity: 0,
-        threshold: 50,
-        unit: 'Pcs'
-      },
-      {
-        id: '9',
-        name: 'Hasaan (WhetStone)',
-        quantity: 14,
-        threshold: 20,
-        unit: 'Pcs'
-      },
-      {
-        id: '10',
-        name: 'Boots',
-        quantity: 500,
-        threshold: 100,
-        unit: 'Pairs'
-      },
-      {
-        id: '11',
-        name: 'Kalaykay',
-        quantity: 20,
-        threshold: 30,
-        unit: 'Pcs'
-      },
-      {
-        id: '12',
-        name: 'Palang Lapad No.8',
-        quantity: 125,
-        threshold: 50,
-        unit: 'Pcs'
-      },
-      {
-        id: '13',
-        name: 'Asarol',
-        quantity: 125,
-        threshold: 50,
-        unit: 'Pcs'
-      }
-    ];
+    // Use API data only - no fallback to mock data
+    if (allInventoryItems.length === 0) {
+      return [];
+    }
     
-    return itemsToUse.filter(item => 
+    return allInventoryItems.filter(item => 
       item.quantity === 0 || item.quantity < item.threshold
     );
   };
